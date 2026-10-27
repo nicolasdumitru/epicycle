@@ -72,8 +72,9 @@
             # Database migrations and offline query metadata for sqlx
             sqlx-cli
 
-            # Scripts
+            # Scripts and the task runner (see justfile)
             python3
+            just
 
             # Nix
             nil
