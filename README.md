@@ -19,6 +19,7 @@ Checks:
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 pnpm --dir ui check
+pnpm --dir ui test
 ```
 
 SQL queries are checked at compile time against metadata committed in `.sqlx/`.
