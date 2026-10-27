@@ -23,7 +23,7 @@ pnpm --dir ui check
 
 ## Layout
 
-- `src-tauri/` — Tauri app crate (thin command layer)
+- `crates/app/` — Tauri app crate (commands and, later, the SQLite storage module)
 - `ui/` — SvelteKit frontend (single-page app, no server rendering)
 
 Design decisions are recorded in [DECISIONS.md](DECISIONS.md).

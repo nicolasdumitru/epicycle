@@ -18,6 +18,11 @@ Newest decisions are appended at the end of each section.
 - **Storage: SQLite through `sqlx`**, chosen for compile-time checked queries. The
   offline query metadata (`.sqlx/`) is committed so that CI and the Nix build need
   no live database (`SQLX_OFFLINE=true`).
+- **Layout:** Rust crates live in `crates/` and the frontend in `ui/`. The root
+  `Cargo.toml` is a workspace manifest only. There are two crates: `crates/core`
+  (pure domain logic; the crate boundary guarantees it can't use Tauri or SQL) and
+  `crates/app` (Tauri commands plus storage). Storage is a module of the app crate
+  until a second program, such as a CLI, needs the database.
 - **App identifier: `io.github.nicolasdumitru.epicycle`.** It determines the data
   directory on every platform and the iOS bundle ID, so it must not change.
 

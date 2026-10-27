@@ -4,10 +4,10 @@
   "version": "0.1.0",
   "identifier": "io.github.nicolasdumitru.epicycle",
   "build": {
-    "frontendDist": "../ui/build",
+    "frontendDist": "../../ui/build",
     "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "pnpm --dir ../ui dev",
-    "beforeBuildCommand": "pnpm --dir ../ui build"
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build"
   },
   "app": {
     "windows": [
