@@ -1,5 +1,5 @@
 {
-  description = "OxiTal";
+  description = "Epicycle - local-first subscription tracker";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -35,6 +35,24 @@
             "rust-src"
           ];
         };
+
+        # System libraries Tauri 2 needs on Linux (WebKitGTK webview + GTK).
+        # https://v2.tauri.app/start/prerequisites/#linux
+        tauriLibs = with pkgs; [
+          at-spi2-atk
+          atkmm
+          cairo
+          gdk-pixbuf
+          glib
+          glib-networking
+          gtk3
+          harfbuzz
+          librsvg
+          libsoup_3
+          openssl
+          pango
+          webkitgtk_4_1
+        ];
       in
       {
         devShells.default = pkgs.mkShell {
@@ -42,11 +60,34 @@
             rustToolchain
           ]
           ++ (with pkgs; [
+            # Tauri
+            cargo-tauri
+            pkg-config
+            gobject-introspection
+
+            # Frontend
+            nodejs
+            pnpm
+
+            # Database migrations and offline query metadata for sqlx
+            sqlx-cli
+
+            # Scripts
+            python3
+
+            # Nix
             nil
             nixd
             nixfmt
             nixfmt-tree
           ]);
+
+          buildInputs = tauriLibs;
+
+          shellHook = ''
+            # Lets the webview find TLS support (needed for HTTPS requests).
+            export GIO_MODULE_DIR="${pkgs.glib-networking}/lib/gio/modules/"
+          '';
         };
       }
     );
