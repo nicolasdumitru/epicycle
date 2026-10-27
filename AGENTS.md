@@ -1,0 +1,1 @@
+Manage Rust dependencies with Cargo and use a Nix flake for all of the other dependencies.
