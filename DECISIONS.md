@@ -83,5 +83,21 @@ separate:
   The import is logged with every conflict and both versions, so the user can switch
   to the other version later.
 - **A Replace import first snapshots the whole database**, so it can be undone.
-- History stays local. It is not part of exported backups unless we decide
-  otherwise.
+- History stays on the device for now.
+
+### Future direction: history in backups and sync (not built yet)
+
+Eventually the change history will be included in backups and synced across
+devices, much like a Git repository with a single branch. Nothing is built for this
+yet, but the history design must not rule it out:
+
+- History entries get globally unique IDs (UUIDs), never auto-increment integers,
+  so entries made on different devices can't collide.
+- Each entry references the entry it replaces (its parent), as Git commits do.
+  Then two devices that edited the same subscription can be detected as having
+  diverged, rather than one silently overwriting the other.
+- Entries are append-only and never rewritten. Undoing a change appends a new
+  entry.
+- Each entry records the device it was made on and when.
+- Merging two diverged histories is the same problem as merge conflicts on import,
+  so the two should share one mechanism.
