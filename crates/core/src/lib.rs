@@ -7,3 +7,4 @@
 
 pub mod money;
 pub mod recurrence;
+pub mod subscription;
