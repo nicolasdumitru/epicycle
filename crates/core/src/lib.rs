@@ -6,3 +6,4 @@
 //! result reproducible in tests.
 
 pub mod money;
+pub mod recurrence;
