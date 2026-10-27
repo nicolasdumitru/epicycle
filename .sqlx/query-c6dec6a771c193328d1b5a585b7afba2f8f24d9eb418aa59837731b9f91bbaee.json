@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO subscriptions (id, name, currency, head_revision_id) VALUES (?, ?, ?, ?)\n             ON CONFLICT (id) DO UPDATE SET\n                 name = excluded.name,\n                 currency = excluded.currency,\n                 head_revision_id = excluded.head_revision_id",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 4
+    },
+    "nullable": []
+  },
+  "hash": "c6dec6a771c193328d1b5a585b7afba2f8f24d9eb418aa59837731b9f91bbaee"
+}

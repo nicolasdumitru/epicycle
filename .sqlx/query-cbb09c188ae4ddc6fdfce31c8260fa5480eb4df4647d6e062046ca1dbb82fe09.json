@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM plans WHERE subscription_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "cbb09c188ae4ddc6fdfce31c8260fa5480eb4df4647d6e062046ca1dbb82fe09"
+}

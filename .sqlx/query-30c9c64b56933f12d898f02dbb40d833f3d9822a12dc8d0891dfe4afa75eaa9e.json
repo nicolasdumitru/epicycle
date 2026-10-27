@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM status_changes WHERE subscription_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "30c9c64b56933f12d898f02dbb40d833f3d9822a12dc8d0891dfe4afa75eaa9e"
+}

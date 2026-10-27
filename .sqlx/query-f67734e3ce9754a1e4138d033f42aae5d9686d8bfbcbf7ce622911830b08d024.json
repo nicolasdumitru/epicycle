@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO status_changes (subscription_id, effective_from, status)\n                 VALUES (?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "f67734e3ce9754a1e4138d033f42aae5d9686d8bfbcbf7ce622911830b08d024"
+}

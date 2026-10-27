@@ -1,0 +1,110 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT subscription_id, effective_from, unit, every, month, day, anchor, amount\n             FROM plans ORDER BY subscription_id, effective_from",
+  "describe": {
+    "columns": [
+      {
+        "name": "subscription_id",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "plans",
+            "name": "subscription_id"
+          }
+        }
+      },
+      {
+        "name": "effective_from",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "plans",
+            "name": "effective_from"
+          }
+        }
+      },
+      {
+        "name": "unit",
+        "ordinal": 2,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "plans",
+            "name": "unit"
+          }
+        }
+      },
+      {
+        "name": "every",
+        "ordinal": 3,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "plans",
+            "name": "every"
+          }
+        }
+      },
+      {
+        "name": "month",
+        "ordinal": 4,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "plans",
+            "name": "month"
+          }
+        }
+      },
+      {
+        "name": "day",
+        "ordinal": 5,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "plans",
+            "name": "day"
+          }
+        }
+      },
+      {
+        "name": "anchor",
+        "ordinal": 6,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "plans",
+            "name": "anchor"
+          }
+        }
+      },
+      {
+        "name": "amount",
+        "ordinal": 7,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "plans",
+            "name": "amount"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "cf50ac5bb67641b3f58d5bb53834c491babcb3a9074cda72165efe94afca3c91"
+}

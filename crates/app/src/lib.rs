@@ -1,3 +1,5 @@
+pub mod db;
+
 use serde::Serialize;
 
 /// Build information shown by the prototype UI. Calling this from the frontend

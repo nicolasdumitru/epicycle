@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO app_state (id, device_id, reporting_currency) VALUES (1, ?, 'EUR')\n             ON CONFLICT (id) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "b54712c2ebc329490a52325627d131e7d0cf158b37cf98f28fea1128536e64e0"
+}

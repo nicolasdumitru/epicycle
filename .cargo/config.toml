@@ -1,0 +1,4 @@
+[env]
+# Check sqlx queries against the committed metadata in .sqlx/ rather than a live
+# database. scripts/sqlx_prepare.py overrides this when regenerating .sqlx/.
+SQLX_OFFLINE = "true"

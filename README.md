@@ -21,6 +21,13 @@ cargo test --workspace
 pnpm --dir ui check
 ```
 
+SQL queries are checked at compile time against metadata committed in `.sqlx/`.
+After changing a query or a migration in `crates/app/migrations/`, regenerate it:
+
+```sh
+python3 scripts/sqlx_prepare.py
+```
+
 ## Layout
 
 - `crates/app/` — Tauri app crate (commands and, later, the SQLite storage module)

@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT subscription_id, effective_from, status\n             FROM status_changes ORDER BY subscription_id, effective_from",
+  "describe": {
+    "columns": [
+      {
+        "name": "subscription_id",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "status_changes",
+            "name": "subscription_id"
+          }
+        }
+      },
+      {
+        "name": "effective_from",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "status_changes",
+            "name": "effective_from"
+          }
+        }
+      },
+      {
+        "name": "status",
+        "ordinal": 2,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "status_changes",
+            "name": "status"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "90f8d2c640b4842de472e8c9eed9a51dcc067590df391c54d822bc5eb0a56281"
+}
