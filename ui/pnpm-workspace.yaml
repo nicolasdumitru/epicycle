@@ -1,0 +1,4 @@
+# Supply-chain hardening: refuse package versions published less than 7 days
+# ago (most hijacked releases are caught and pulled within that window).
+# To fast-track an urgent security fix, add it to minimumReleaseAgeExclude.
+minimumReleaseAge: 10080
