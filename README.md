@@ -24,6 +24,7 @@ pnpm --dir ui check
 ## Layout
 
 - `crates/app/` — Tauri app crate (commands and, later, the SQLite storage module)
+- `crates/core/` — pure domain logic: money, recurrence, subscriptions, commitment, cash flow, exchange rates
 - `ui/` — SvelteKit frontend (single-page app, no server rendering)
 
 Design decisions are recorded in [DECISIONS.md](DECISIONS.md).

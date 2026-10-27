@@ -48,9 +48,15 @@ separate:
 | Rule | Meaning |
 |---|---|
 | `Days { every }` | Every *n* days. A pure duration. |
-| `Weeks { every, weekday }` | Every *n* weeks on a fixed weekday. |
-| `Months { every, day }` | Every *n* months on a fixed day of the month (1–31 or last). |
+| `Weeks { every }` | Every *n* weeks, on the anchor's weekday. |
+| `Months { every, day }` | Every *n* months on a fixed day of the month (1–31). |
 | `Years { every, month, day }` | Every *n* years on a fixed date. |
+
+- **Day 31 means "the last day of the month".** Clamping makes it fall on the last
+  day of every month, so a separate "last day" option would be a second way of
+  writing the same rule.
+- **Weekly rules don't store a weekday.** It always equals the anchor's weekday,
+  and storing it twice would allow the two to disagree.
 
 - Each rule comes with an **anchor**: one real payment date that fixes the phase,
   i.e. which month or week the "every *n*" counts from. A smart constructor rejects
@@ -72,6 +78,35 @@ separate:
   an average year. 52 weeks per year would understate weekly costs by about 0.3%.
 - Scheduled cash flow uses no averages: it counts the actual payment dates in a
   period, so a year with 53 weekly payments shows 53.
+
+### Subscriptions: plan history and status history
+- **A subscription keeps a history of plans, not only of prices.** A plan is a
+  billing schedule plus an amount, in effect from a date until the next plan.
+  Switching from monthly to yearly billing, or moving the billing day after a
+  pause, is a new plan. A price change is a new plan with the same schedule.
+  Without this, editing a schedule would silently rewrite every past estimated
+  payment.
+- **The first plan's date is the subscription's start.** No payments are counted
+  before it.
+- **Status changes take effect on their date.** A subscription is active until the
+  first change. A payment that falls on the day a pause or cancellation takes
+  effect is not counted, and one on the day it becomes active again is.
+- **A subscription's currency is fixed.** Changing currency means creating a new
+  subscription.
+- Every period is half-open, `[from, to)`, so consecutive periods never count a
+  payment twice.
+
+### Exchange rates
+- **Rates are stored the way the ECB publishes them:** units of a currency per
+  1 EUR, with the date the rate applies to and its source (ECB or manual). Other
+  pairs are converted through EUR.
+- **Choosing a rate for a date:** the latest one on or before that date. If there
+  is none that old, the earliest one after it is used. Every conversion reports
+  the rates it used, so the UI can show their dates.
+- **A manual rate wins over an ECB rate for the same currency and date.**
+- **An ECB rate is stale once it is more than 5 days old.** That covers the longest
+  regular gap between ECB publications: Thursday to Tuesday over Easter. Manual
+  rates are always shown as manual, never as fresh or stale.
 
 ## Data history (to be finalised in the storage milestone)
 
