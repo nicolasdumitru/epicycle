@@ -7,6 +7,7 @@
 
 pub mod cashflow;
 pub mod commitment;
+pub mod fx;
 pub mod money;
 pub mod recurrence;
 pub mod subscription;
