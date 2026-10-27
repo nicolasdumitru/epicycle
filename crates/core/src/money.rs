@@ -91,6 +91,16 @@ pub enum MoneyError {
     Overflow,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
+pub enum ParseMoneyError {
+    #[error("{0:?} is not an amount")]
+    NotANumber(String),
+    #[error("{currency} amounts have at most {places} decimal places")]
+    TooManyDecimals { currency: Currency, places: u32 },
+    #[error("amount out of range")]
+    Overflow,
+}
+
 /// An exact amount: an integer number of minor units in a currency.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Money {
@@ -121,6 +131,33 @@ impl Money {
     /// The amount in major units, e.g. `12.34` for 1234 cents.
     pub fn to_major(self) -> Decimal {
         Decimal::new(self.minor, self.currency.exponent())
+    }
+
+    /// Parses an amount typed in major units: `"12.99"` EUR is 1299 cents.
+    ///
+    /// A comma is accepted as the decimal separator when there is no dot, since
+    /// many locales (and their numeric keypads) use one. Thousands separators are
+    /// not accepted. More decimals than the currency has is an error rather than
+    /// a silent rounding.
+    pub fn parse_major(text: &str, currency: Currency) -> Result<Money, ParseMoneyError> {
+        let trimmed = text.trim();
+        let normalized = if trimmed.contains('.') {
+            trimmed.to_owned()
+        } else {
+            trimmed.replacen(',', ".", 1)
+        };
+        let value = Decimal::from_str(&normalized)
+            .map_err(|_| ParseMoneyError::NotANumber(text.to_owned()))?
+            .normalize();
+        let places = currency.exponent();
+        if value.scale() > places {
+            return Err(ParseMoneyError::TooManyDecimals { currency, places });
+        }
+        let minor = value
+            .checked_mul(Decimal::from(10_i64.pow(places)))
+            .and_then(|minor| i64::try_from(minor).ok())
+            .ok_or(ParseMoneyError::Overflow)?;
+        Ok(Money::new(minor, currency))
     }
 }
 
@@ -296,6 +333,48 @@ mod tests {
         assert_eq!(
             Money::new(1, Currency::EUR).checked_add(Money::new(1, usd)),
             Err(MoneyError::CurrencyMismatch(Currency::EUR, usd))
+        );
+    }
+
+    #[test]
+    fn parses_amounts_typed_in_major_units() {
+        let parse = |text, code| Money::parse_major(text, currency(code)).map(|m| m.minor);
+        assert_eq!(parse("12.99", "EUR"), Ok(1299));
+        assert_eq!(parse(" 12,99 ", "EUR"), Ok(1299));
+        assert_eq!(parse("12", "EUR"), Ok(1200));
+        assert_eq!(parse("12.5", "EUR"), Ok(1250));
+        assert_eq!(parse("12.990", "EUR"), Ok(1299));
+        assert_eq!(parse("1500", "JPY"), Ok(1500));
+        assert_eq!(parse("1.234", "KWD"), Ok(1234));
+        assert_eq!(
+            parse("12.999", "EUR"),
+            Err(ParseMoneyError::TooManyDecimals {
+                currency: Currency::EUR,
+                places: 2
+            })
+        );
+        assert_eq!(
+            parse("1.5", "JPY"),
+            Err(ParseMoneyError::TooManyDecimals {
+                currency: currency("JPY"),
+                places: 0
+            })
+        );
+        assert_eq!(
+            parse("1,234.5", "EUR"),
+            Err(ParseMoneyError::NotANumber("1,234.5".into()))
+        );
+        assert_eq!(
+            parse("twelve", "EUR"),
+            Err(ParseMoneyError::NotANumber("twelve".into()))
+        );
+        assert_eq!(
+            parse("", "EUR"),
+            Err(ParseMoneyError::NotANumber("".into()))
+        );
+        assert_eq!(
+            parse("99999999999999999999", "EUR"),
+            Err(ParseMoneyError::Overflow)
         );
     }
 
