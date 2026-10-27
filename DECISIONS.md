@@ -136,3 +136,25 @@ yet, but the history design must not rule it out:
 - Each entry records the device it was made on and when.
 - Merging two diverged histories is the same problem as merge conflicts on import,
   so the two should share one mechanism.
+- **Under consideration: syncing through storage the user already has** (Nextcloud,
+  iCloud Drive, Google Drive), instead of a paid sync service. If we do this, the
+  SQLite database must never sit in the synced folder: file-sync tools copy whole
+  files without locking, and two devices writing to one database corrupt it or
+  leave "conflicted copy" files. What would sync is the history: each device
+  writes its new revisions as files to a shared folder and merges in the other
+  devices' files. The history design above is chosen so that this works.
+
+## Storage
+
+- **The current state is stored in normalised tables** (`subscriptions`, `plans`,
+  `status_changes`) with `CHECK` constraints, so SQLite rejects invalid rows, and
+  the compile-time checked queries have real columns to check.
+- **History is the append-only `revisions` table.** Each revision holds a full JSON
+  copy of the subscription, tagged with a format version so old copies can be
+  upgraded when the format changes. A deletion is a revision with no copy.
+- **Revision IDs are UUIDv7.** They sort by creation time, so they order each
+  subscription's history. `created_at` is for display only.
+- **Saving a subscription that didn't change records no revision.**
+- **Builds use the committed query metadata in `.sqlx/` and need no database.**
+  After changing a query or a migration, run `python3 scripts/sqlx_prepare.py`
+  and commit the result. CI runs it with `--check`.
