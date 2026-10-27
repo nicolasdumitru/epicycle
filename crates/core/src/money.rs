@@ -218,6 +218,15 @@ impl MultiCurrency {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
+
+    /// Multiplies every total by `numerator / denominator`.
+    pub fn checked_scale(&self, numerator: Decimal, denominator: Decimal) -> Option<Self> {
+        self.iter()
+            .map(|amount| amount.checked_scale(numerator, denominator))
+            .try_fold(MultiCurrency::new(), |acc, scaled| {
+                acc.checked_add(scaled?).ok()
+            })
+    }
 }
 
 /// Sums amounts per currency.
