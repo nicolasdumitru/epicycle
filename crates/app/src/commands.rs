@@ -60,7 +60,7 @@ impl From<Money> for MoneyView {
     }
 }
 
-fn rounded(amount: Fractional) -> Result<MoneyView, CommandError> {
+pub(crate) fn rounded(amount: Fractional) -> Result<MoneyView, CommandError> {
     Ok(amount.round()?.into())
 }
 
@@ -686,7 +686,7 @@ pub fn rates_overview(rates: &RateTable, reporting: Currency, today: Date) -> Ra
 }
 
 /// A currency the user typed, which must be one in use.
-fn currency_in_use(code: &str) -> Result<Currency, CommandError> {
+pub(crate) fn currency_in_use(code: &str) -> Result<Currency, CommandError> {
     let currency: Currency = code.trim().to_uppercase().parse()?;
     if !currency.in_use() {
         return Err(CommandError(format!(

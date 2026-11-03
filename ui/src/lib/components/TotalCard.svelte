@@ -21,12 +21,18 @@
 
 	let {
 		monthlyByCurrency,
-		reloadKey
+		reloadKey,
+		currency = $bindable(),
+		ratesVersion = $bindable()
 	}: {
 		/** The commitment in each original currency. */
 		monthlyByCurrency: MoneyView[];
 		/** Anything that changes when subscriptions do, to recompute. */
 		reloadKey: unknown;
+		/** The currency totals are shown in; empty until the default loads. */
+		currency: string;
+		/** Goes up whenever exchange rates or the default currency change. */
+		ratesVersion: number;
 	} = $props();
 
 	// `undefined` means the device's locale.
@@ -34,11 +40,8 @@
 
 	let options = $state<CurrencyOption[]>([]);
 	let favorites = $state<string[]>([]);
-	// Empty until the default currency is known.
-	let currency = $state('');
 	let total = $state<ConvertedTotal | null>(null);
 	let error = $state<string | null>(null);
-	let ratesVersion = $state(0);
 
 	async function load(code: string) {
 		try {
@@ -193,9 +196,10 @@
 
 	.head {
 		display: flex;
+		flex-wrap: wrap;
 		justify-content: space-between;
 		align-items: start;
-		gap: 1rem;
+		gap: 0.5rem 1rem;
 	}
 
 	h2 {

@@ -91,6 +91,18 @@ design, DECISIONS.md has the details.
   rates for currencies the ECB doesn't publish. The total is shown in the
   reporting currency by default and can be switched to any other currency.
 
+## Milestone 2: finish the MVP dashboard
+
+Agreed 2026-11-03.
+
+| Item | Status |
+|---|---|
+| Upcoming payments | Done: next 30 days, or 90, grouped by day, each in its own currency. |
+| Monthly chart: scheduled cash flow vs monthly-equivalent commitment, kept separate | Done: columns and a line on one axis, six months back to six ahead, in the dashboard's currency, with hover details and a table view. |
+
+Checked at phone width (360 px) and in dark mode in a browser; not yet on a
+real phone.
+
 ## Next steps
 
 Agreed order for the rest of milestone 1 (2026-11-03):

@@ -8,6 +8,7 @@ import type { CurrencyOption } from './bindings/CurrencyOption';
 import type { DeletedView } from './bindings/DeletedView';
 import type { Edit } from './bindings/Edit';
 import type { Imported } from './bindings/Imported';
+import type { MonthlyChart } from './bindings/MonthlyChart';
 import type { ImportMode } from './bindings/ImportMode';
 import type { ImportSummary } from './bindings/ImportSummary';
 import type { NewSubscription } from './bindings/NewSubscription';
@@ -15,6 +16,7 @@ import type { Overview } from './bindings/Overview';
 import type { RatesOverview } from './bindings/RatesOverview';
 import type { RevisionView } from './bindings/RevisionView';
 import type { SubscriptionDetail } from './bindings/SubscriptionDetail';
+import type { UpcomingPayment } from './bindings/UpcomingPayment';
 
 export const getOverview = (): Promise<Overview> => invoke('overview');
 
@@ -91,3 +93,11 @@ export const getFavorites = (): Promise<string[]> => invoke('favorite_currencies
 
 export const setFavorites = (currencies: string[]): Promise<string[]> =>
 	invoke('set_favorite_currencies', { currencies });
+
+/** Payments due in the next `days` days, in date order. */
+export const getUpcoming = (days: number): Promise<UpcomingPayment[]> =>
+	invoke('upcoming_payments', { days });
+
+/** Cash flow and commitment per month, in `currency` (the reporting currency if null). */
+export const getMonthlyChart = (currency: string | null): Promise<MonthlyChart> =>
+	invoke('monthly_chart', { currency });
