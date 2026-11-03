@@ -31,7 +31,8 @@ let
       (root + "/Cargo.lock")
       (root + "/.cargo")
       (root + "/.sqlx")
-      (root + "/crates")
+      # The Android project isn't part of the desktop app.
+      (fs.difference (root + "/crates") (fs.maybeMissing (root + "/crates/app/gen/android")))
       (fs.difference (root + "/ui") (
         fs.unions [
           (fs.maybeMissing (root + "/ui/node_modules"))
