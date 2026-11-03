@@ -1,10 +1,10 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id, snapshot FROM revisions WHERE subscription_id = ? ORDER BY id DESC LIMIT 1",
+  "query": "SELECT r.id AS \"id!\", r.snapshot FROM revisions AS r\n           WHERE r.subscription_id = ?\n             AND NOT EXISTS (\n                 SELECT 1 FROM revisions AS c\n                 WHERE c.parent_id = r.id OR c.merge_parent_id = r.id\n             )",
   "describe": {
     "columns": [
       {
-        "name": "id",
+        "name": "id!",
         "ordinal": 0,
         "type_info": "Text",
         "origin": {
@@ -34,5 +34,5 @@
       true
     ]
   },
-  "hash": "d8cdc93dc9dee7f12243acbd32c04e80ceb7695384818d797b3f94cf3179aadd"
+  "hash": "867a3ba21f48cbe3d35fdf958ae06106294300764fbba56a345d8cb7876e3996"
 }

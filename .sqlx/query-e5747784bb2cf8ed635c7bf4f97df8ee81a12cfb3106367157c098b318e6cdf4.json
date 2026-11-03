@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO revisions\n             (id, subscription_id, parent_id, merge_parent_id, device_id, created_at, cause,\n              snapshot_version, snapshot)\n         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 9
+    },
+    "nullable": []
+  },
+  "hash": "e5747784bb2cf8ed635c7bf4f97df8ee81a12cfb3106367157c098b318e6cdf4"
+}

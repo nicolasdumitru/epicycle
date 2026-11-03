@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id, parent_id, device_id, created_at, cause, snapshot_version, snapshot\n             FROM revisions WHERE subscription_id = ? ORDER BY id",
+  "query": "SELECT id, subscription_id, parent_id, merge_parent_id, device_id, created_at,\n                    cause, snapshot_version, snapshot\n             FROM revisions WHERE subscription_id = ? ORDER BY id",
   "describe": {
     "columns": [
       {
@@ -15,8 +15,19 @@
         }
       },
       {
-        "name": "parent_id",
+        "name": "subscription_id",
         "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "revisions",
+            "name": "subscription_id"
+          }
+        }
+      },
+      {
+        "name": "parent_id",
+        "ordinal": 2,
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -26,8 +37,19 @@
         }
       },
       {
+        "name": "merge_parent_id",
+        "ordinal": 3,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "revisions",
+            "name": "merge_parent_id"
+          }
+        }
+      },
+      {
         "name": "device_id",
-        "ordinal": 2,
+        "ordinal": 4,
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -38,7 +60,7 @@
       },
       {
         "name": "created_at",
-        "ordinal": 3,
+        "ordinal": 5,
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -49,7 +71,7 @@
       },
       {
         "name": "cause",
-        "ordinal": 4,
+        "ordinal": 6,
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -60,7 +82,7 @@
       },
       {
         "name": "snapshot_version",
-        "ordinal": 5,
+        "ordinal": 7,
         "type_info": "Integer",
         "origin": {
           "Table": {
@@ -71,7 +93,7 @@
       },
       {
         "name": "snapshot",
-        "ordinal": 6,
+        "ordinal": 8,
         "type_info": "Text",
         "origin": {
           "Table": {
@@ -86,6 +108,8 @@
     },
     "nullable": [
       false,
+      false,
+      true,
       true,
       false,
       false,
@@ -94,5 +118,5 @@
       true
     ]
   },
-  "hash": "d1473baac050ad1f4b2191fc465cf1966e8a2eaa6d9eccf742f71e730234a617"
+  "hash": "a254dea794d2de8c9edb6a9a7b3e8ccd3f8bc8543ea7b9f47f6117f0599fa5cc"
 }
