@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	backupFileName,
+	describePrice,
 	describeRateSource,
 	formatRate,
 	describeChange,
@@ -180,6 +181,44 @@ describe('rates', () => {
 		);
 		expect(describeRateSource({ ...rate, source: 'manual', freshness: 'manual' }, en)).toBe(
 			'entered by you, 2 Nov 2026'
+		);
+	});
+});
+
+describe('describePrice', () => {
+	const billing = { unit: 'months' as const, every: 1, day: 12 };
+	const sub = {
+		id: 'x',
+		name: 'Claude Pro',
+		status: 'active' as const,
+		price: { amount: '20.00', currency: 'EUR' },
+		billing,
+		monthly: null,
+		annual: null,
+		nextPayment: '2026-11-12',
+		start: '2026-01-12',
+		notes: '',
+		nextChange: null
+	};
+
+	it('shows the price and billing', () => {
+		expect(describePrice(sub, en)).toBe('€20.00 · Monthly on the 12th');
+	});
+
+	it('shows a free period and what follows it', () => {
+		const trial = {
+			...sub,
+			price: { amount: '0.00', currency: 'EUR' },
+			nextPayment: '2027-03-12',
+			nextChange: {
+				from: '2027-03-12',
+				price: { amount: '20.00', currency: 'EUR' },
+				billing,
+				anchor: '2027-03-12'
+			}
+		};
+		expect(describePrice(trial, en)).toBe(
+			'Free until 12 Mar 2027, then €20.00 · monthly on the 12th'
 		);
 	});
 });

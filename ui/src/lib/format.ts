@@ -8,6 +8,7 @@ import type { ImportSummary } from './bindings/ImportSummary';
 import type { MoneyView } from './bindings/MoneyView';
 import type { RateView } from './bindings/RateView';
 import type { StatusChoice } from './bindings/StatusChoice';
+import type { SubscriptionView } from './bindings/SubscriptionView';
 import type { Unit } from './bindings/Unit';
 
 type Locale = string | undefined;
@@ -194,7 +195,9 @@ export function describeChange(change: ChangeView, locale: Locale): string {
 		case 'notes':
 			return change.notes === '' ? 'Notes removed' : 'Notes changed';
 		case 'plan_set':
-			return `From ${formatDate(change.from, locale)}: ${formatMoney(change.price, locale)}, ${describeBilling(change.billing, change.anchor, locale).toLowerCase()}`;
+			return isFree(change.price)
+				? `Free from ${formatDate(change.from, locale)}: no payments`
+				: `From ${formatDate(change.from, locale)}: ${formatMoney(change.price, locale)}, ${describeBilling(change.billing, change.anchor, locale).toLowerCase()}`;
 		case 'plan_removed':
 			return `Price change from ${formatDate(change.from, locale)} removed`;
 		case 'status_set': {
@@ -225,4 +228,22 @@ export function describeRateSource(rate: RateView, locale: Locale): string {
 		case 'manual':
 			return `entered by you, ${date}`;
 	}
+}
+
+/** True for a price of zero: a free period, such as a trial. */
+export function isFree(money: MoneyView): boolean {
+	return Number(money.amount) === 0;
+}
+
+/**
+ * What a subscription costs now: "€20.00 · Monthly on the 12th", or during a
+ * free period, "Free until 12 Mar 2027, then €20.00 · monthly on the 12th".
+ */
+export function describePrice(s: SubscriptionView, locale: Locale): string {
+	if (isFree(s.price) && s.nextChange && !isFree(s.nextChange.price)) {
+		const next = s.nextChange;
+		const billing = describeBilling(next.billing, next.anchor, locale);
+		return `Free until ${formatDate(next.from, locale)}, then ${formatMoney(next.price, locale)} · ${billing.charAt(0).toLowerCase()}${billing.slice(1)}`;
+	}
+	return `${formatMoney(s.price, locale)} · ${describeBilling(s.billing, s.nextPayment, locale)}`;
 }

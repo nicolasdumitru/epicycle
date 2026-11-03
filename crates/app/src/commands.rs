@@ -128,6 +128,8 @@ pub struct SubscriptionView {
     pub next_payment: Option<String>,
     pub start: String,
     pub notes: String,
+    /// The next plan change after today, e.g. the end of a free trial.
+    pub next_change: Option<PlanView>,
 }
 
 /// A plan in a subscription's history.
@@ -334,13 +336,22 @@ pub fn new_subscription(form: &NewSubscription, today: Date) -> Result<Subscript
         Some(since) if !since.is_empty() => parse_date(since, "Start date")?,
         _ => today.min(next),
     };
-    Ok(Subscription::new(
+    let s = Subscription::new(
         SubscriptionId::generate(),
         &form.name,
         currency,
         start,
         plan,
-    )?)
+    )?;
+    // The next payment is the next one: nothing is due between now and then
+    // (a free trial, or time already paid for). Earlier payments, back to the
+    // start, are estimates of what was paid.
+    let from = today.max(start);
+    Ok(if next > from {
+        s.with_free_period(from, next)?
+    } else {
+        s
+    })
 }
 
 /// A plan billing `amount` (as typed) every `every` units, with a payment on
@@ -445,7 +456,13 @@ pub fn apply_edit(s: &Subscription, edit: &Edit) -> Result<Subscription, Command
                     "The first payment can't be before the change takes effect".into(),
                 ));
             }
-            Ok(s.with_plan(from, plan_of(amount, s.currency(), *every, *unit, next)?)?)
+            let changed = s.with_plan(from, plan_of(amount, s.currency(), *every, *unit, next)?)?;
+            // Nothing is paid between the change and its first payment.
+            Ok(if next > from {
+                changed.with_free_period(from, next)?
+            } else {
+                changed
+            })
         }
         Edit::Status { from, status } => {
             let from = parse_date(from, "Effective date")?;
@@ -474,7 +491,21 @@ fn subscription_view(s: &Subscription, today: Date) -> Result<SubscriptionView, 
         next_payment: s.next_payment(today).map(|p| p.date.to_string()),
         start: s.start().to_string(),
         notes: s.notes().to_owned(),
+        next_change: s
+            .plans()
+            .iter()
+            .find(|p| p.from > today)
+            .map(|p| plan_view(s.currency(), p)),
     })
+}
+
+fn plan_view(currency: Currency, p: &epicycle_core::subscription::Dated<Plan>) -> PlanView {
+    PlanView {
+        from: p.from.to_string(),
+        price: Money::new(p.value.amount, currency).into(),
+        billing: p.value.schedule.rule().into(),
+        anchor: p.value.schedule.anchor().to_string(),
+    }
 }
 
 pub fn detail_of(s: &Subscription, today: Date) -> Result<SubscriptionDetail, CommandError> {
@@ -484,12 +515,7 @@ pub fn detail_of(s: &Subscription, today: Date) -> Result<SubscriptionDetail, Co
         plans: s
             .plans()
             .iter()
-            .map(|p| PlanView {
-                from: p.from.to_string(),
-                price: Money::new(p.value.amount, s.currency()).into(),
-                billing: p.value.schedule.rule().into(),
-                anchor: p.value.schedule.anchor().to_string(),
-            })
+            .map(|p| plan_view(s.currency(), p))
             .collect(),
         status_changes: s
             .status_changes()
@@ -1106,6 +1132,41 @@ mod tests {
         // Before the change, the old price still applies.
         let before = detail_of(&s, date(2026, 11, 20)).unwrap();
         assert_eq!(before.subscription.price.amount, "10.00");
+    }
+
+    #[test]
+    fn moving_the_next_payment_months_ahead_skips_the_months_between() {
+        // Reported: the next payment moved to 2027-03-12 still showed one on
+        // the 12th of this month.
+        let edit = Edit::Plan {
+            from: "2026-11-03".into(),
+            amount: "20".into(),
+            every: 1,
+            unit: Unit::Months,
+            next_payment: "2027-03-12".into(),
+        };
+        let s = apply_edit(&music(), &edit).unwrap();
+        let view = subscription_view(&s, date(2026, 11, 3)).unwrap();
+        assert_eq!(view.next_payment.as_deref(), Some("2027-03-12"));
+    }
+
+    #[test]
+    fn a_free_trial_is_free_until_the_first_payment() {
+        let today = date(2026, 11, 3);
+        let s = new_subscription(&form("20", 1, Unit::Months, "2026-12-03"), today).unwrap();
+        let view = subscription_view(&s, today).unwrap();
+        assert_eq!(view.next_payment.as_deref(), Some("2026-12-03"));
+        assert_eq!(view.price.amount, "0.00");
+        assert_eq!(view.monthly.unwrap().amount, "0.00");
+        let next = view.next_change.unwrap();
+        assert_eq!(
+            (next.from.as_str(), next.price.amount.as_str()),
+            ("2026-12-03", "20.00")
+        );
+        // A next payment that is simply the next one adds no free period.
+        let plain = new_subscription(&form("20", 1, Unit::Months, "2026-11-12"), today).unwrap();
+        assert_eq!(plain.plans().len(), 1);
+        assert_eq!(subscription_view(&plain, today).unwrap().next_change, None);
     }
 
     #[test]
