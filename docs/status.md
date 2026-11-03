@@ -12,7 +12,7 @@ Last updated: 2026-11-03.
 | Criterion | Status |
 |---|---|
 | 1. Stack chosen and approved | Done |
-| 2. Prototype on NixOS and iOS: add a subscription, see its monthly equivalent and next payment, persists across restarts | Done on the desktop (tested on NixOS under WSL). iOS: CI builds for the simulator; installing on an iPhone waits for a friend's Mac (see "Open questions"). |
+| 2. Prototype on NixOS and iOS: add a subscription, see its monthly equivalent and next payment, persists across restarts | Done on the desktop (tested on native NixOS and under WSL). iOS: CI builds for the simulator; installing on an iPhone waits for a friend's Mac (see "Open questions"). |
 | 3. Domain crate with unit tests: monthly and annual equivalents, payment schedules (including month-end and leap-year cases), period totals, currency handling | Done (`crates/core`) |
 | 4. Backup export/import round-trip test proving no data loss and no duplication | Done (`crates/app/src/db.rs` tests), plus Export and Import in the UI |
 
@@ -20,7 +20,7 @@ Everything except the iOS half of criterion 2 is done (2026-11-03), along with
 much that went beyond the milestone: editing, notes, history and restore,
 exchange rates and favourite currencies, and CI.
 
-Not yet checked: native NixOS (outside WSL), phone-width layouts on a real
+Not yet checked: phone-width layouts on a real
 device, how the app gets today's date in the device's time zone on iOS, and the
 document picker on iOS (desktop uses GTK file dialogs).
 
