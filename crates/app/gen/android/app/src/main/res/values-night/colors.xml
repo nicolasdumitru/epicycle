@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Matches the dark "bg" colour in ui/src/routes/+layout.svelte. -->
+    <color name="app_background">#161615</color>
+</resources>

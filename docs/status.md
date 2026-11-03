@@ -127,9 +127,11 @@ Agreed order for the rest of milestone 1 (2026-11-03):
    key doesn't exist yet: the user creates it with `just android-keystore` and
    adds the GitHub secrets it prints. Runs in the emulator (2026-11-03):
    start-up and exchange rates needed Android fixes, now done. Not yet tried on
-   a real phone; a friend will. Seen in the emulator (Pixel 10), to fix: the
-   page starts under the transparent status bar, so the heading almost touches
-   the clock (safe areas).
+   a real phone; a friend will. Fixed after testing in a Pixel 10 emulator:
+   the page drew under the status bar, gesture bar and keyboard (Android's
+   WebView doesn't report safe-area insets to CSS, so the activity now pads the
+   content); the currency list ran off the left of the screen; the empty chart
+   showed a bare axis.
 9. **Windows build in CI** (2026-11-03, hasn't run yet):
    `.github/workflows/windows.yml` runs the Rust tests on Windows and builds the
    installers (unsigned, so SmartScreen warns). The user will test them on a

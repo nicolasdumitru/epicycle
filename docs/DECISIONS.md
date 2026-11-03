@@ -73,6 +73,12 @@ Newest decisions are appended at the end of each section.
   - **No emulator in the flake** (2026-11-03): the user runs emulators from
     Android Studio, installed on the system, which keeps its own SDK, emulator
     and phone images. A flake package for the emulator was tried and removed.
+  - **Safe areas on Android are handled natively** (2026-11-03): the app draws
+    edge to edge, but Android's WebView reports 0 for CSS
+    `env(safe-area-inset-*)`. `MainActivity` pads the content by the status
+    bar, gesture bar, camera cutout and keyboard instead, and the window
+    background matches the page's, so the bars sit on the app's colour in light
+    and dark mode. iOS uses the CSS insets, which WebKit reports.
   - **The database is registered before start-up opens it** (`DbHandle`):
     on Android the web view can call commands while start-up is still waiting
     for the data folder from the Java side, and they used to fail with "state
