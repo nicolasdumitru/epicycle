@@ -1,16 +1,17 @@
 <script lang="ts">
-	import { addSubscription } from '#lib/api.ts';
+	import { onMount } from 'svelte';
+	import { addSubscription, getCurrencies } from '#lib/api.ts';
+	import type { CurrencyOption } from '#lib/bindings/CurrencyOption.ts';
 	import type { Overview } from '#lib/bindings/Overview.ts';
 	import type { Unit } from '#lib/bindings/Unit.ts';
+	import CurrencyInput from './CurrencyInput.svelte';
+	import DateInput from './DateInput.svelte';
 
 	let {
 		today,
 		onAdded,
 		onCancel
 	}: { today: string; onAdded: (overview: Overview) => void; onCancel: () => void } = $props();
-
-	// Suggestions only; any ISO 4217 code is accepted and validated in Rust.
-	const commonCurrencies = ['EUR', 'USD', 'GBP', 'RON', 'CHF', 'PLN', 'CZK', 'HUF', 'SEK', 'NOK', 'DKK', 'JPY'];
 
 	const units: { value: Unit; one: string; many: string }[] = [
 		{ value: 'days', one: 'day', many: 'days' },
@@ -30,6 +31,15 @@
 	let error = $state<string | null>(null);
 	let saving = $state(false);
 	let nameInput: HTMLInputElement | undefined = $state();
+	let currencies = $state<CurrencyOption[]>([]);
+
+	onMount(async () => {
+		try {
+			currencies = await getCurrencies();
+		} catch (e) {
+			error = String(e);
+		}
+	});
 
 	// The form opens because the user asked to add something: start typing right away.
 	$effect(() => nameInput?.focus());
@@ -76,22 +86,9 @@
 			Price per payment
 			<input bind:value={amount} required inputmode="decimal" autocomplete="off" placeholder="9.99" />
 		</label>
-		<label class="currency">
-			Currency
-			<input
-				bind:value={currency}
-				required
-				list="currencies"
-				maxlength="3"
-				autocapitalize="characters"
-				autocomplete="off"
-			/>
-			<datalist id="currencies">
-				{#each commonCurrencies as code (code)}
-					<option value={code}></option>
-				{/each}
-			</datalist>
-		</label>
+		<div class="currency">
+			<CurrencyInput bind:value={currency} options={currencies} label="Currency" />
+		</div>
 	</div>
 
 	<fieldset>
@@ -114,17 +111,20 @@
 		</div>
 	</fieldset>
 
-	<label>
-		Next payment
-		<input type="date" bind:value={nextPayment} required />
-		<span class="hint">Monthly and yearly billing repeat on this day.</span>
-	</label>
+	<DateInput
+		bind:value={nextPayment}
+		label="Next payment"
+		hint="Monthly and yearly billing repeat on this day."
+		required
+		{today}
+	/>
 
-	<label>
-		Subscribed since <span class="optional">(optional)</span>
-		<input type="date" bind:value={since} />
-		<span class="hint">Used to estimate past spending.</span>
-	</label>
+	<DateInput
+		bind:value={since}
+		label="Subscribed since"
+		hint="Used to estimate past spending."
+		{today}
+	/>
 
 	{#if error}
 		<p class="error" role="alert">{error}</p>
@@ -179,7 +179,7 @@
 	}
 
 	.currency {
-		width: 6rem;
+		width: 8rem;
 	}
 
 	.every {
@@ -190,12 +190,6 @@
 		flex: 1;
 	}
 
-	.hint,
-	.optional {
-		color: var(--muted);
-		font-size: 0.875rem;
-		font-weight: 400;
-	}
 
 	.error {
 		margin: 0;

@@ -8,7 +8,8 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
-iso_currency = "0.7.1"
+# `iterator` lists every currency, for the currency picker.
+iso_currency = { version = "0.7.1", features = ["iterator"] }
 jiff = { version = "0.2.38", default-features = false, features = ["std", "serde"] }
 rust_decimal = { version = "1.43.0", default-features = false, features = ["std", "serde"] }
 serde = { version = "1.0.229", features = ["derive"] }

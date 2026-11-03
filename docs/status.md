@@ -16,6 +16,9 @@ Last updated: 2026-11-03.
 | 3. Domain crate with unit tests: monthly and annual equivalents, payment schedules (including month-end and leap-year cases), period totals, currency handling | Done (`crates/core`) |
 | 4. Backup export/import round-trip test proving no data loss and no duplication | Done (`crates/app/src/db.rs` tests), plus Export and Import in the UI |
 
+First impressions from testing on the desktop (2026-11-03) are being worked
+through; see "Next steps".
+
 Not yet checked: native NixOS (outside WSL), phone-width layouts on a real
 device, how the app gets today's date in the device's time zone on iOS, and the
 document picker on iOS (desktop uses GTK file dialogs).
@@ -62,24 +65,46 @@ design, DECISIONS.md has the details.
   the first two migrations still say "DECISIONS.md" without the folder: editing
   an applied migration changes its checksum, and sqlx then refuses to open
   existing databases.
+- **Currency and date inputs replaced.** The currency field only accepts
+  currencies in use for payments today (no funds such as CHE, no replaced ones
+  such as HRK), searchable by code or name. Dates are typed (year first, or year
+  last in the locale's order) or picked from a calendar that jumps straight to
+  any month and year: WebKitGTK's `<input type="date">` doesn't accept typing.
+- **Replace import gets a second, destructive mode.** The current Replace (adds
+  revisions, erases nothing) stays the default and its wording gets clearer. A
+  separate "replace history" option makes this device's history exactly the
+  backup's, permanently deleting what isn't in it. It is a deliberate exception to
+  "keep data forever", behind a red confirmation button that is disabled for 5
+  seconds (with a circular countdown) next to a friendly Cancel.
+- **History in the UI**, with restoring an earlier version of a subscription.
+- **Plain-text notes per subscription**, part of the subscription itself: editing
+  them creates a revision, and they are in backups and merged like any other
+  field. Backup format version 2; version 1 files still import, with empty notes.
+  Markdown may come later.
+- **Converted total**: ECB rates fetched and cached when online, plus manual
+  rates for currencies the ECB doesn't publish. The total is shown in the
+  reporting currency by default and can be switched to any other currency.
 
 ## Next steps
 
-Not yet agreed; a starting point for planning the next milestone.
+Agreed order for the rest of milestone 1 (2026-11-03):
+
+1. ~~Currency and date inputs~~ (done).
+2. **Editing subscriptions with notes**: rename, notes, change price (adds a plan
+   from a date), pause, resume, cancel. The domain crate supports all of these
+   except notes; the UI only adds and deletes.
+3. **History view** with restore, and the two Replace modes (see above).
+4. **Exchange rates and the converted total**. The domain logic exists
+   (`crates/core/src/fx.rs`); nothing fetches or stores rates yet.
+
+Later, not yet agreed:
 
 - **iOS build**: find a Mac (for example a remote build service), then go through
   the specification's platform validation checklist on a real iPhone, including
   the document picker for backups.
 - **CI** on GitHub Actions: `just check` and `just test`.
-- **Editing subscriptions**: rename, change price (adds a plan from a date),
-  pause, resume, cancel. The domain crate supports all of these; the UI only adds
-  and deletes. Also a "last day of the month" option, and showing the change
-  history.
 - **Upcoming payments** list and the **monthly chart** (scheduled cash flow vs
   monthly-equivalent commitment, kept visibly separate).
-- **Exchange rates**: fetch from the ECB, cache, show fresh/stale/manual, and a
-  reporting-currency total. The domain logic exists (`crates/core/src/fx.rs`);
-  nothing fetches or stores rates yet.
 - **Nix package** for installing the app on NixOS (`nix run`, or in the system
   configuration).
 
