@@ -70,9 +70,13 @@ Newest decisions are appended at the end of each section.
     release builds or the other way round.
   - APKs target 64-bit ARM only, which covers current phones; other targets
     can be added to the build command if needed.
-  - **No emulator in the flake** (2026-11-03): the user runs emulators from
-    Android Studio, installed on the system, which keeps its own SDK, emulator
-    and phone images. A flake package for the emulator was tried and removed.
+  - **The emulator is a separate flake package, on trial** (2026-11-04)
+    (`nix run .#android-emulator`, a Pixel 10 with Android 16), not part of
+    the Android shell, so CI doesn't download the system image. It is a small
+    launcher of our own (`nix/android_emulator.py`) rather than nixpkgs'
+    `emulateApp`, which pins command-line tools too old to know phones after
+    the Pixel 6. It was removed in favour of Android Studio and brought back to
+    try again; it may go again.
   - **Safe areas on Android are handled natively** (2026-11-03): the app draws
     edge to edge, but Android's WebView reports 0 for CSS
     `env(safe-area-inset-*)`. `MainActivity` pads the content by the status
