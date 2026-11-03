@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { deleteSubscription, getOverview } from '#lib/api.ts';
+	import { getOverview } from '#lib/api.ts';
 	import type { Overview } from '#lib/bindings/Overview.ts';
 	import type { SubscriptionView } from '#lib/bindings/SubscriptionView.ts';
 	import AddSubscription from '#lib/components/AddSubscription.svelte';
@@ -20,8 +20,6 @@
 	let overview = $state<Overview | null>(null);
 	let error = $state<string | null>(null);
 	let adding = $state(false);
-	// The subscription whose delete button was tapped once and awaits confirmation.
-	let confirmingDelete = $state<string | null>(null);
 
 	const statusLabels: Record<SubscriptionView['status'], string> = {
 		active: 'Active',
@@ -37,15 +35,6 @@
 			error = String(e);
 		}
 	});
-
-	async function remove(id: string) {
-		try {
-			overview = await deleteSubscription(id);
-			confirmingDelete = null;
-		} catch (e) {
-			error = String(e);
-		}
-	}
 </script>
 
 <main>
@@ -102,45 +91,33 @@
 				<ul>
 					{#each overview.subscriptions as s (s.id)}
 						<li>
-							<div class="main">
-								<h3>{s.name}</h3>
-								<p class="muted">
-									{formatMoney(s.price, locale)} · {describeBilling(s.billing, s.nextPayment, locale)}
-								</p>
-								{#if s.monthly && !isMonthly(s.billing)}
-									<p class="muted">≈ {formatMoney(s.monthly, locale)} per month</p>
-								{/if}
-								{#if s.status !== 'active'}
-									<p class="badge">{statusLabels[s.status]}</p>
-								{/if}
-							</div>
-							<div class="side">
-								{#if s.nextPayment}
-									<p>
-										<span class="muted">Next</span>
-										<time datetime={s.nextPayment}>{formatDate(s.nextPayment, locale)}</time>
-									</p>
+							<a class="card" href="/subscriptions/{s.id}">
+								<div class="main">
+									<h3>{s.name}</h3>
 									<p class="muted">
-										{relativeDays(daysBetween(overview.today, s.nextPayment), locale)}
+										{formatMoney(s.price, locale)} · {describeBilling(s.billing, s.nextPayment, locale)}
 									</p>
-								{:else}
-									<p class="muted">No upcoming payment</p>
-								{/if}
-								{#if confirmingDelete === s.id}
-									<div class="confirm">
-										<button class="secondary" onclick={() => (confirmingDelete = null)}>Keep</button>
-										<button class="danger" onclick={() => remove(s.id)}>Delete</button>
-									</div>
-								{:else}
-									<button
-										class="link"
-										onclick={() => (confirmingDelete = s.id)}
-										aria-label="Delete {s.name}"
-									>
-										Delete
-									</button>
-								{/if}
-							</div>
+									{#if s.monthly && !isMonthly(s.billing)}
+										<p class="muted">≈ {formatMoney(s.monthly, locale)} per month</p>
+									{/if}
+									{#if s.status !== 'active'}
+										<p class="badge">{statusLabels[s.status]}</p>
+									{/if}
+								</div>
+								<div class="side">
+									{#if s.nextPayment}
+										<p>
+											<span class="muted">Next</span>
+											<time datetime={s.nextPayment}>{formatDate(s.nextPayment, locale)}</time>
+										</p>
+										<p class="muted">
+											{relativeDays(daysBetween(overview.today, s.nextPayment), locale)}
+										</p>
+									{:else}
+										<p class="muted">No upcoming payment</p>
+									{/if}
+								</div>
+							</a>
 						</li>
 					{/each}
 				</ul>
@@ -233,7 +210,8 @@
 		gap: 0.75rem;
 	}
 
-	li {
+	/* The whole card opens the subscription. */
+	.card {
 		display: flex;
 		justify-content: space-between;
 		gap: 1rem;
@@ -241,6 +219,12 @@
 		border: 1px solid var(--border);
 		border-radius: 0.75rem;
 		padding: 0.875rem 1rem;
+		color: inherit;
+		text-decoration: none;
+	}
+
+	.card:hover {
+		border-color: var(--accent);
 	}
 
 	.main {
@@ -272,17 +256,12 @@
 		background: var(--border);
 	}
 
-	.confirm {
-		display: flex;
-		gap: 0.5rem;
-	}
-
 	time {
 		font-variant-numeric: tabular-nums;
 	}
 
 	@media (max-width: 30rem) {
-		li {
+		.card {
 			flex-direction: column;
 			gap: 0.5rem;
 		}

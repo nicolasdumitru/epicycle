@@ -3,11 +3,13 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import type { CurrencyOption } from './bindings/CurrencyOption';
+import type { Edit } from './bindings/Edit';
 import type { Imported } from './bindings/Imported';
 import type { ImportMode } from './bindings/ImportMode';
 import type { ImportSummary } from './bindings/ImportSummary';
 import type { NewSubscription } from './bindings/NewSubscription';
 import type { Overview } from './bindings/Overview';
+import type { SubscriptionDetail } from './bindings/SubscriptionDetail';
 
 export const getOverview = (): Promise<Overview> => invoke('overview');
 
@@ -18,6 +20,12 @@ export const getCurrencies = (): Promise<CurrencyOption[]> =>
 
 export const addSubscription = (form: NewSubscription): Promise<Overview> =>
 	invoke('add_subscription', { form });
+
+export const getSubscription = (id: string): Promise<SubscriptionDetail> =>
+	invoke('subscription', { id });
+
+export const editSubscription = (id: string, edit: Edit): Promise<SubscriptionDetail> =>
+	invoke('edit_subscription', { id, edit });
 
 export const deleteSubscription = (id: string): Promise<Overview> =>
 	invoke('delete_subscription', { id });
