@@ -9,7 +9,11 @@ export default defineConfig({
 	plugins: [
 		sveltekit({
 			// Tauri serves static files, so build a single-page app with no server rendering.
-			adapter: adapter({ fallback: 'index.html' })
+			adapter: adapter({ fallback: 'index.html' }),
+			// The default version is the build time, which changes the output of every
+			// build. It only matters for detecting new deployments of a website, which
+			// an app bundled with Tauri never has.
+			version: { name: 'epicycle' }
 		})
 	],
 	// Keep Rust compiler errors visible in the terminal.

@@ -7,7 +7,7 @@
     "frontendDist": "../../ui/build",
     "devUrl": "http://localhost:5173",
     "beforeDevCommand": "pnpm dev",
-    "beforeBuildCommand": "pnpm build"
+    "beforeBuildCommand": "python3 ../scripts/build_ui.py"
   },
   "app": {
     "windows": [
