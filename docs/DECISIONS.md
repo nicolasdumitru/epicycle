@@ -111,6 +111,24 @@ separate:
 - **An ECB rate is stale once it is more than 5 days old.** That covers the longest
   regular gap between ECB publications: Thursday to Tuesday over Easter. Manual
   rates are always shown as manual, never as fresh or stale.
+- **Fetching** (2026-11-03): the ECB Data API's daily rates against the euro, as
+  CSV with `detail=dataonly` (eight plain columns, parsed in `crates/core/src/ecb.rs`
+  without a CSV library). The first fetch takes two weeks; later ones start the
+  day after the newest cached rate, never after today (the API rejects future
+  start dates), and not again within an hour of a fetch that brought new rates.
+  The dashboard asks for a refresh when it opens; failing (offline) is silent
+  except that out-of-date rates are flagged.
+- **HTTP: `reqwest` with rustls** (its default TLS). It verifies certificates with
+  each platform's trust store (`rustls-platform-verifier`), which iOS and Android
+  need, and Tauri already locks the same `reqwest` version.
+- **Rates are stored in `exchange_rates`**, keyed by currency, date and source,
+  with the rate as exact decimal text. ECB rates are a cache; manual rates are the
+  user's data. **Manual rates are not in backups yet** (that is a format change,
+  version 3).
+- **Totals refuse to guess**: if any currency involved has no rate at all, the
+  converted total isn't shown, and the missing currencies are named.
+- **The reporting currency is the default for totals**; the dashboard can show
+  them in any other currency without changing it, or make that the default.
 
 ## Data history
 

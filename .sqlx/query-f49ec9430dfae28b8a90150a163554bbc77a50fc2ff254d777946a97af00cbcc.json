@@ -1,0 +1,28 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT max(date) AS \"date: String\", max(recorded_at) AS \"at: String\"\n               FROM exchange_rates WHERE source = 'ecb'",
+  "describe": {
+    "columns": [
+      {
+        "name": "date: String",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": "Expression"
+      },
+      {
+        "name": "at: String",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": "Expression"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      true,
+      true
+    ]
+  },
+  "hash": "f49ec9430dfae28b8a90150a163554bbc77a50fc2ff254d777946a97af00cbcc"
+}

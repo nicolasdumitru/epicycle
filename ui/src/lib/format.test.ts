@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
 	backupFileName,
+	describeRateSource,
+	formatRate,
 	describeChange,
 	daysBetween,
 	describeBilling,
@@ -142,6 +144,27 @@ describe('describeChange', () => {
 		).toBe('From 1 Dec 2026: €12.50, monthly on the 15th');
 		expect(describeChange({ kind: 'status_set', from: '2027-01-01', status: 'paused' }, en)).toBe(
 			'Paused from 1 Jan 2027'
+		);
+	});
+});
+
+describe('rates', () => {
+	const rate = {
+		currency: 'RON',
+		date: '2026-11-02',
+		perEur: '5.3405',
+		source: 'ecb' as const,
+		freshness: 'fresh' as const
+	};
+
+	it('shows the rate and where it came from', () => {
+		expect(formatRate(rate, en)).toBe('1 EUR = 5.3405 RON');
+		expect(describeRateSource(rate, en)).toBe('ECB, 2 Nov 2026');
+		expect(describeRateSource({ ...rate, freshness: 'stale' }, en)).toBe(
+			'ECB, 2 Nov 2026 (out of date)'
+		);
+		expect(describeRateSource({ ...rate, source: 'manual', freshness: 'manual' }, en)).toBe(
+			'entered by you, 2 Nov 2026'
 		);
 	});
 });

@@ -1,0 +1,244 @@
+<script lang="ts">
+	// The current recurring commitment converted to one currency: the default
+	// (reporting) currency, or any other chosen here. Shows which rates the
+	// total relies on and how old they are, and refreshes ECB rates in the
+	// background when online.
+	import { onMount } from 'svelte';
+	import {
+		getConvertedTotal,
+		getCurrencies,
+		refreshRates,
+		setReportingCurrency
+	} from '#lib/api.ts';
+	import type { ConvertedTotal } from '#lib/bindings/ConvertedTotal.ts';
+	import type { CurrencyOption } from '#lib/bindings/CurrencyOption.ts';
+	import type { MoneyView } from '#lib/bindings/MoneyView.ts';
+	import { describeRateSource, formatMoney, formatRate } from '#lib/format.ts';
+	import CurrencyInput from './CurrencyInput.svelte';
+
+	let {
+		monthlyByCurrency,
+		reloadKey
+	}: {
+		/** The commitment in each original currency. */
+		monthlyByCurrency: MoneyView[];
+		/** Anything that changes when subscriptions do, to recompute. */
+		reloadKey: unknown;
+	} = $props();
+
+	// `undefined` means the device's locale.
+	const locale = undefined;
+
+	let options = $state<CurrencyOption[]>([]);
+	// Empty until the default currency is known.
+	let currency = $state('');
+	let total = $state<ConvertedTotal | null>(null);
+	let error = $state<string | null>(null);
+	let offline = $state(false);
+	let ratesVersion = $state(0);
+
+	async function load(code: string) {
+		try {
+			const result = await getConvertedTotal(code);
+			// Ignore an answer for a currency that is no longer chosen.
+			if (code === currency) total = result;
+			error = null;
+		} catch (e) {
+			error = String(e);
+		}
+	}
+
+	$effect(() => {
+		void reloadKey;
+		void ratesVersion;
+		if (currency) load(currency);
+	});
+
+	onMount(async () => {
+		try {
+			options = await getCurrencies();
+			currency = (await getConvertedTotal(null)).defaultCurrency;
+		} catch (e) {
+			error = String(e);
+			return;
+		}
+		// Opportunistic: if this fails, cached and manual rates still work.
+		try {
+			if ((await refreshRates()) > 0) ratesVersion += 1;
+		} catch {
+			offline = true;
+		}
+	});
+
+	async function makeDefault() {
+		if (!total) return;
+		try {
+			await setReportingCurrency(total.currency);
+			ratesVersion += 1;
+		} catch (e) {
+			error = String(e);
+		}
+	}
+
+	const stale = $derived(total?.rates.filter((r) => r.freshness === 'stale') ?? []);
+	// Worth showing only when something was actually converted.
+	const others = $derived(monthlyByCurrency.filter((m) => m.currency !== total?.currency));
+</script>
+
+<section class="card" aria-labelledby="total-heading">
+	<div class="head">
+		<h2 id="total-heading">Recurring commitment</h2>
+		<div class="picker">
+			<CurrencyInput bind:value={currency} {options} label="Shown in" />
+		</div>
+	</div>
+
+	{#if total}
+		{#if total.missing.length > 0}
+			<p class="warning">
+				No exchange rate for {total.missing.join(', ')}, so the total can't be shown.
+				<a href="/rates">Enter a rate</a>
+			</p>
+		{:else}
+			<div class="stats">
+				<div>
+					<h3>Per month</h3>
+					<p class="value">{total.monthly ? formatMoney(total.monthly, locale) : '–'}</p>
+				</div>
+				<div>
+					<h3>Per year</h3>
+					<p class="value">{total.annual ? formatMoney(total.annual, locale) : '–'}</p>
+				</div>
+			</div>
+		{/if}
+
+		{#if others.length > 0}
+			<p class="muted">
+				Per month in original currencies:
+				{monthlyByCurrency.map((m) => formatMoney(m, locale)).join(' + ')}
+			</p>
+		{/if}
+
+		{#if stale.length > 0}
+			<p class="warning">
+				Some rates are out of date{offline ? " and couldn't be updated: you seem to be offline" : ''}.
+				<a href="/rates">Check rates</a>
+			</p>
+		{/if}
+
+		{#if total.rates.length > 0}
+			<details>
+				<summary>Exchange rates used</summary>
+				<ul>
+					{#each total.rates as rate (rate.currency)}
+						<li>{formatRate(rate, locale)} <span class="muted">({describeRateSource(rate, locale)})</span></li>
+					{/each}
+				</ul>
+				<a href="/rates">All rates</a>
+			</details>
+		{/if}
+
+		{#if total.currency !== total.defaultCurrency}
+			<button class="link" onclick={makeDefault}>Always show totals in {total.currency}</button>
+		{/if}
+
+		<p class="note">
+			What active subscriptions cost at current prices, averaged per month and per year.
+		</p>
+	{:else if !error}
+		<p class="muted">Loading…</p>
+	{/if}
+
+	{#if error}
+		<p class="error" role="alert">{error}</p>
+	{/if}
+</section>
+
+<style>
+	.card {
+		display: grid;
+		gap: 0.75rem;
+		background: var(--surface);
+		border: 1px solid var(--border);
+		border-radius: 0.75rem;
+		padding: 1rem;
+	}
+
+	.head {
+		display: flex;
+		justify-content: space-between;
+		align-items: start;
+		gap: 1rem;
+	}
+
+	h2 {
+		margin: 0;
+		font-size: 1rem;
+		color: var(--muted);
+		font-weight: 600;
+	}
+
+	.picker {
+		width: 9rem;
+		flex: none;
+	}
+
+	.stats {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 0.75rem;
+	}
+
+	h3 {
+		margin: 0 0 0.25rem;
+		font-size: 0.875rem;
+		color: var(--muted);
+		font-weight: 600;
+	}
+
+	p {
+		margin: 0;
+	}
+
+	.value {
+		font-size: 1.75rem;
+		font-weight: 650;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.muted,
+	.note {
+		color: var(--muted);
+	}
+
+	.note {
+		font-size: 0.875rem;
+	}
+
+	.warning {
+		color: var(--danger);
+	}
+
+	.error {
+		color: var(--danger);
+	}
+
+	a {
+		color: var(--accent);
+	}
+
+	details ul {
+		margin: 0.5rem 0;
+		padding-left: 1.25rem;
+	}
+
+	summary {
+		cursor: pointer;
+		padding: 0.625rem 0;
+	}
+
+	button.link {
+		justify-self: start;
+		min-height: 44px;
+	}
+</style>

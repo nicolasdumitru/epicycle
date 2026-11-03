@@ -22,7 +22,9 @@ use uuid::Uuid;
 
 use crate::db::Db;
 use crate::history_view::{DeletedView, RevisionView, history_view};
+use epicycle_core::fx::{self, Freshness, Rate, RateSource, RateTable};
 use epicycle_core::history::{History, RevisionId};
+use rust_decimal::Decimal;
 
 /// An error to show to the user. It reaches the UI as its message.
 #[derive(Debug)]
@@ -306,12 +308,7 @@ fn parse_date(text: &str, field: &str) -> Result<Date, CommandError> {
 
 /// Builds a subscription from the form, validating every field.
 pub fn new_subscription(form: &NewSubscription, today: Date) -> Result<Subscription, CommandError> {
-    let currency: Currency = form.currency.trim().to_uppercase().parse()?;
-    if !currency.in_use() {
-        return Err(CommandError(format!(
-            "{currency} is no longer used for payments; choose another currency"
-        )));
-    }
+    let currency = currency_in_use(&form.currency)?;
     let next = parse_date(&form.next_payment, "Next payment")?;
     let plan = plan_of(&form.amount, currency, form.every, form.unit, next)?;
     let start = match form.since.as_deref().map(str::trim) {
@@ -507,6 +504,179 @@ pub fn overview_of(subscriptions: &[Subscription], today: Date) -> Result<Overvi
     })
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum RateSourceView {
+    Ecb,
+    Manual,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum FreshnessView {
+    Fresh,
+    Stale,
+    Manual,
+}
+
+/// An exchange rate: units of `currency` per 1 EUR on `date`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct RateView {
+    pub currency: String,
+    pub date: String,
+    /// Exact decimal, e.g. `"5.3405"`.
+    pub per_eur: String,
+    pub source: RateSourceView,
+    pub freshness: FreshnessView,
+}
+
+fn rate_view(rate: &Rate, today: Date) -> RateView {
+    RateView {
+        currency: rate.currency().code().to_owned(),
+        date: rate.date().to_string(),
+        per_eur: rate.per_eur().normalize().to_string(),
+        source: match rate.source() {
+            RateSource::Ecb { .. } => RateSourceView::Ecb,
+            RateSource::Manual { .. } => RateSourceView::Manual,
+        },
+        freshness: match rate.freshness(today) {
+            Freshness::Fresh => FreshnessView::Fresh,
+            Freshness::Stale => FreshnessView::Stale,
+            Freshness::Manual => FreshnessView::Manual,
+        },
+    }
+}
+
+/// The current recurring commitment in one currency.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ConvertedTotal {
+    pub currency: String,
+    /// The reporting currency, used unless another is chosen.
+    pub default_currency: String,
+    /// Absent when a rate is missing.
+    pub monthly: Option<MoneyView>,
+    pub annual: Option<MoneyView>,
+    /// The rates the totals rely on, so their age can be shown.
+    pub rates: Vec<RateView>,
+    /// Currencies with no rate at all; the totals can't be computed until one
+    /// is entered.
+    pub missing: Vec<String>,
+}
+
+/// Converts the current commitment to `to` with the rates for `today`.
+pub fn converted_total_of(
+    subscriptions: &[Subscription],
+    rates: &RateTable,
+    to: Currency,
+    default: Currency,
+    today: Date,
+) -> Result<ConvertedTotal, CommandError> {
+    let totals = total_commitment_on(subscriptions, today)?;
+    let mut currencies: Vec<Currency> = totals.monthly.iter().map(|f| f.currency).collect();
+    currencies.push(to);
+    currencies.sort();
+    currencies.dedup();
+    let missing: Vec<String> = currencies
+        .iter()
+        .filter(|&&c| c != Currency::EUR && rates.rate_for(c, today).is_none())
+        .map(|c| c.code().to_owned())
+        .collect();
+    let mut view = ConvertedTotal {
+        currency: to.code().to_owned(),
+        default_currency: default.code().to_owned(),
+        monthly: None,
+        annual: None,
+        rates: Vec::new(),
+        missing,
+    };
+    if !view.missing.is_empty() {
+        return Ok(view);
+    }
+    let monthly = fx::convert_total(rates, &totals.monthly, to, today)?;
+    let annual = fx::convert_total(rates, &totals.annual, to, today)?;
+    view.monthly = Some(rounded(monthly.amount)?);
+    view.annual = Some(rounded(annual.amount)?);
+    // Both totals use the same rates; list each once.
+    view.rates = monthly.rates.iter().map(|r| rate_view(r, today)).collect();
+    Ok(view)
+}
+
+/// Every currency's rate for today (the newest on or before it), and every
+/// manual rate.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct RatesOverview {
+    pub today: String,
+    pub reporting_currency: String,
+    /// One per currency, sorted by code.
+    pub current: Vec<RateView>,
+    /// Newest first.
+    pub manual: Vec<RateView>,
+}
+
+pub fn rates_overview(rates: &RateTable, reporting: Currency, today: Date) -> RatesOverview {
+    let mut currencies: Vec<Currency> = rates.iter().map(Rate::currency).collect();
+    currencies.dedup();
+    let mut manual: Vec<RateView> = rates
+        .iter()
+        .filter(|r| matches!(r.source(), RateSource::Manual { .. }))
+        .map(|r| rate_view(r, today))
+        .collect();
+    manual.sort_by(|a, b| b.date.cmp(&a.date).then(a.currency.cmp(&b.currency)));
+    RatesOverview {
+        today: today.to_string(),
+        reporting_currency: reporting.code().to_owned(),
+        current: currencies
+            .into_iter()
+            .filter_map(|c| rates.rate_for(c, today))
+            .map(|r| rate_view(r, today))
+            .collect(),
+        manual,
+    }
+}
+
+/// A currency the user typed, which must be one in use.
+fn currency_in_use(code: &str) -> Result<Currency, CommandError> {
+    let currency: Currency = code.trim().to_uppercase().parse()?;
+    if !currency.in_use() {
+        return Err(CommandError(format!(
+            "{currency} is no longer used for payments; choose another currency"
+        )));
+    }
+    Ok(currency)
+}
+
+/// A rate typed by the user as "1 EUR = `per_eur` `currency`".
+pub fn manual_rate(
+    currency: &str,
+    date: &str,
+    per_eur: &str,
+    now: jiff::Timestamp,
+) -> Result<Rate, CommandError> {
+    let currency = currency_in_use(currency)?;
+    let date = parse_date(date, "Date")?;
+    let per_eur: Decimal = per_eur
+        .trim()
+        .replace(',', ".")
+        .parse()
+        .map_err(|_| CommandError(format!("{per_eur:?} is not a number")))?;
+    Rate::new(
+        currency,
+        date,
+        per_eur,
+        RateSource::Manual { entered_at: now },
+    )
+    .map_err(|e| match e {
+        fx::FxError::BaseCurrency => CommandError("EUR is the base: 1 EUR = 1 EUR".into()),
+        other => other.into(),
+    })
+}
+
 /// Today in the device's time zone.
 fn today() -> Date {
     jiff::Zoned::now().date()
@@ -515,6 +685,77 @@ fn today() -> Date {
 #[tauri::command]
 pub async fn overview(db: State<'_, Db>) -> Result<Overview, CommandError> {
     overview_of(&db.subscriptions().await?, today())
+}
+
+/// The current commitment converted to `currency`, or to the reporting
+/// currency if none is given.
+#[tauri::command]
+pub async fn converted_total(
+    db: State<'_, Db>,
+    currency: Option<String>,
+) -> Result<ConvertedTotal, CommandError> {
+    let default = db.reporting_currency().await?;
+    let to = match currency.as_deref() {
+        Some(code) => currency_in_use(code)?,
+        None => default,
+    };
+    converted_total_of(
+        &db.subscriptions().await?,
+        &db.rates().await?,
+        to,
+        default,
+        today(),
+    )
+}
+
+/// Fetches new ECB rates if the cached ones are out of date. Returns how many
+/// were stored; fails quietly-worded when offline.
+#[tauri::command]
+pub async fn refresh_rates(db: State<'_, Db>) -> Result<u32, CommandError> {
+    let stored = crate::rates::refresh(&db, today()).await?;
+    Ok(u32::try_from(stored).unwrap_or(u32::MAX))
+}
+
+#[tauri::command]
+pub async fn exchange_rates(db: State<'_, Db>) -> Result<RatesOverview, CommandError> {
+    Ok(rates_overview(
+        &db.rates().await?,
+        db.reporting_currency().await?,
+        today(),
+    ))
+}
+
+#[tauri::command]
+pub async fn add_manual_rate(
+    db: State<'_, Db>,
+    currency: String,
+    date: String,
+    per_eur: String,
+) -> Result<RatesOverview, CommandError> {
+    let rate = manual_rate(&currency, &date, &per_eur, jiff::Timestamp::now())?;
+    db.save_rates(&[rate]).await?;
+    exchange_rates(db).await
+}
+
+#[tauri::command]
+pub async fn delete_manual_rate(
+    db: State<'_, Db>,
+    currency: String,
+    date: String,
+) -> Result<RatesOverview, CommandError> {
+    db.delete_manual_rate(currency.parse()?, parse_date(&date, "Date")?)
+        .await?;
+    exchange_rates(db).await
+}
+
+#[tauri::command]
+pub async fn set_reporting_currency(
+    db: State<'_, Db>,
+    currency: String,
+) -> Result<(), CommandError> {
+    db.set_reporting_currency(currency_in_use(&currency)?)
+        .await?;
+    Ok(())
 }
 
 /// The currencies offered for new subscriptions, sorted by code.
@@ -873,6 +1114,92 @@ mod tests {
             status: StatusChoice::Cancelled,
         };
         assert!(apply_edit(&music(), &edit).is_err());
+    }
+
+    fn ecb(currency: &str, day: i8, per_eur: &str) -> Rate {
+        Rate::new(
+            currency.parse().unwrap(),
+            date(2026, 11, day),
+            per_eur.parse().unwrap(),
+            RateSource::Ecb {
+                fetched_at: jiff::Timestamp::UNIX_EPOCH,
+            },
+        )
+        .unwrap()
+    }
+
+    fn priced(name: &str, amount: &str, currency: &str) -> Subscription {
+        let mut f = form(amount, 1, Unit::Months, "2026-11-15");
+        f.name = name.into();
+        f.currency = currency.into();
+        new_subscription(&f, date(2026, 11, 1)).unwrap()
+    }
+
+    #[test]
+    fn converts_the_commitment_to_one_currency() {
+        let subs = [priced("A", "10", "EUR"), priced("B", "53.40", "RON")];
+        let rates = RateTable::new([ecb("RON", 2, "5.34"), ecb("USD", 2, "1.12")]);
+        let eur = Currency::EUR;
+        let today = date(2026, 11, 3);
+
+        let total = converted_total_of(&subs, &rates, eur, eur, today).unwrap();
+        assert_eq!(total.monthly.unwrap().amount, "20.00");
+        assert_eq!(total.annual.unwrap().amount, "240.00");
+        assert_eq!(total.rates.len(), 1);
+        assert_eq!(total.rates[0].freshness, FreshnessView::Fresh);
+
+        // Any other currency, through EUR: 20 EUR = 22.40 USD.
+        let usd = "USD".parse().unwrap();
+        let total = converted_total_of(&subs, &rates, usd, eur, today).unwrap();
+        assert_eq!(total.monthly.unwrap().amount, "22.40");
+        assert_eq!(total.default_currency, "EUR");
+    }
+
+    #[test]
+    fn names_missing_rates_instead_of_guessing() {
+        let subs = [priced("A", "10", "GBP")];
+        let rates = RateTable::new([ecb("USD", 2, "1.12")]);
+        let eur = Currency::EUR;
+        let chf = "CHF".parse().unwrap();
+        let total = converted_total_of(&subs, &rates, chf, eur, date(2026, 11, 3)).unwrap();
+        assert_eq!(total.monthly, None);
+        assert_eq!(total.missing, ["CHF", "GBP"]);
+    }
+
+    #[test]
+    fn marks_old_ecb_rates_as_stale() {
+        let subs = [priced("A", "10", "USD")];
+        let rates = RateTable::new([ecb("USD", 2, "1.12")]);
+        let eur = Currency::EUR;
+        let total = converted_total_of(&subs, &rates, eur, eur, date(2026, 11, 20)).unwrap();
+        assert_eq!(total.rates[0].freshness, FreshnessView::Stale);
+    }
+
+    #[test]
+    fn reads_manual_rates_as_typed() {
+        let now = jiff::Timestamp::UNIX_EPOCH;
+        let rate = manual_rate("ron", "2026-11-03", "5,1", now).unwrap();
+        assert_eq!(rate.per_eur(), Decimal::new(51, 1));
+        assert!(manual_rate("RON", "2026-11-03", "0", now).is_err());
+        assert!(
+            manual_rate("RON", "2026-11-03", "abc", now)
+                .unwrap_err()
+                .0
+                .contains("not a number")
+        );
+        assert!(
+            manual_rate("EUR", "2026-11-03", "1", now)
+                .unwrap_err()
+                .0
+                .contains("base")
+        );
+
+        // A manual rate wins over the ECB's for the same day, and is listed.
+        let table = RateTable::new([ecb("RON", 3, "5.34"), rate]);
+        let overview = rates_overview(&table, Currency::EUR, date(2026, 11, 3));
+        assert_eq!(overview.current[0].source, RateSourceView::Manual);
+        assert_eq!(overview.current[0].per_eur, "5.1");
+        assert_eq!(overview.manual.len(), 1);
     }
 
     #[test]

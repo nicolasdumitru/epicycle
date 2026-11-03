@@ -6,6 +6,7 @@ import type { ChangeView } from './bindings/ChangeView';
 import type { ConflictView } from './bindings/ConflictView';
 import type { ImportSummary } from './bindings/ImportSummary';
 import type { MoneyView } from './bindings/MoneyView';
+import type { RateView } from './bindings/RateView';
 import type { StatusChoice } from './bindings/StatusChoice';
 import type { Unit } from './bindings/Unit';
 
@@ -191,5 +192,26 @@ export function describeChange(change: ChangeView, locale: Locale): string {
 		}
 		case 'status_removed':
 			return `Status change from ${formatDate(change.from, locale)} removed`;
+	}
+}
+
+/** "1 EUR = 5.3405 RON" */
+export function formatRate(rate: RateView, locale: Locale): string {
+	const value = new Intl.NumberFormat(locale, { maximumFractionDigits: 10 }).format(
+		Number(rate.perEur)
+	);
+	return `1 EUR = ${value} ${rate.currency}`;
+}
+
+/** "ECB, 2 Nov 2026", "ECB, 20 Oct 2026 (out of date)", "entered by you, 3 Nov 2026". */
+export function describeRateSource(rate: RateView, locale: Locale): string {
+	const date = formatDate(rate.date, locale);
+	switch (rate.freshness) {
+		case 'fresh':
+			return `ECB, ${date}`;
+		case 'stale':
+			return `ECB, ${date} (out of date)`;
+		case 'manual':
+			return `entered by you, ${date}`;
 	}
 }

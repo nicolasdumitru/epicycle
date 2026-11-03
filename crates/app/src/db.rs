@@ -9,6 +9,7 @@ use std::path::Path;
 use std::str::FromStr;
 
 use epicycle_core::backup::{Backup, Settings};
+use epicycle_core::fx::{Rate, RateSource, RateTable};
 use epicycle_core::history::{
     Cause, History, HistoryError, HistoryReplacement, ImportMode, ImportPlan, NewHead, Revision,
     RevisionId, plan_history_replacement, plan_import,
@@ -18,6 +19,7 @@ use epicycle_core::recurrence::{DayOfMonth, Month, Rule, Schedule};
 use epicycle_core::subscription::{Dated, Plan, Status, Subscription, SubscriptionId};
 use jiff::Timestamp;
 use jiff::civil::Date;
+use rust_decimal::Decimal;
 use sqlx::SqliteConnection;
 use sqlx::sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePool, SqlitePoolOptions};
 use thiserror::Error;
@@ -356,6 +358,109 @@ impl Db {
             .collect();
         deleted.sort_by_key(|d| std::cmp::Reverse(d.0.created_at));
         Ok(deleted)
+    }
+
+    /// Every stored exchange rate.
+    pub async fn rates(&self) -> Result<RateTable, DbError> {
+        let rows = sqlx::query!(
+            "SELECT currency, date, source, per_eur, recorded_at FROM exchange_rates
+             ORDER BY currency, date, source"
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        let rates = rows
+            .into_iter()
+            .map(|row| {
+                let at: Timestamp = row.recorded_at.parse().map_err(corrupt)?;
+                let source = match row.source.as_str() {
+                    "ecb" => RateSource::Ecb { fetched_at: at },
+                    "manual" => RateSource::Manual { entered_at: at },
+                    other => return Err(corrupt(format_args!("unknown rate source {other:?}"))),
+                };
+                Rate::new(
+                    row.currency.parse().map_err(corrupt)?,
+                    parse_date(&row.date)?,
+                    Decimal::from_str(&row.per_eur).map_err(corrupt)?,
+                    source,
+                )
+                .map_err(corrupt)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(RateTable::new(rates))
+    }
+
+    /// Stores rates, replacing any with the same currency, date and source.
+    pub async fn save_rates(&self, rates: &[Rate]) -> Result<(), DbError> {
+        let mut tx = self.pool.begin().await?;
+        for rate in rates {
+            let currency = rate.currency().code();
+            let date = rate.date().to_string();
+            let per_eur = rate.per_eur().to_string();
+            let (source, at) = match rate.source() {
+                RateSource::Ecb { fetched_at } => ("ecb", fetched_at),
+                RateSource::Manual { entered_at } => ("manual", entered_at),
+            };
+            let at = at.to_string();
+            sqlx::query!(
+                "INSERT INTO exchange_rates (currency, date, source, per_eur, recorded_at)
+                 VALUES (?, ?, ?, ?, ?)
+                 ON CONFLICT (currency, date, source) DO UPDATE SET
+                     per_eur = excluded.per_eur,
+                     recorded_at = excluded.recorded_at",
+                currency,
+                date,
+                source,
+                per_eur,
+                at
+            )
+            .execute(&mut *tx)
+            .await?;
+        }
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub async fn delete_manual_rate(&self, currency: Currency, date: Date) -> Result<(), DbError> {
+        let (currency, date) = (currency.code(), date.to_string());
+        sqlx::query!(
+            "DELETE FROM exchange_rates WHERE currency = ? AND date = ? AND source = 'manual'",
+            currency,
+            date
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// The date of the newest ECB rate and when the newest ECB rates were
+    /// fetched, if any ever were.
+    pub async fn last_ecb_fetch(&self) -> Result<Option<(Date, Timestamp)>, DbError> {
+        let row = sqlx::query!(
+            r#"SELECT max(date) AS "date: String", max(recorded_at) AS "at: String"
+               FROM exchange_rates WHERE source = 'ecb'"#
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        match (row.date, row.at) {
+            (Some(date), Some(at)) => Ok(Some((parse_date(&date)?, at.parse().map_err(corrupt)?))),
+            _ => Ok(None),
+        }
+    }
+
+    pub async fn reporting_currency(&self) -> Result<Currency, DbError> {
+        let mut conn = self.pool.acquire().await?;
+        Ok(settings(&mut conn).await?.reporting_currency)
+    }
+
+    pub async fn set_reporting_currency(&self, currency: Currency) -> Result<(), DbError> {
+        let code = currency.code();
+        sqlx::query!(
+            "UPDATE app_state SET reporting_currency = ? WHERE id = 1",
+            code
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
     }
 
     /// Identifies this installation in the change history.

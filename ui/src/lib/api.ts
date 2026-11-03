@@ -2,6 +2,7 @@
 // They reject with an error message.
 
 import { invoke } from '@tauri-apps/api/core';
+import type { ConvertedTotal } from './bindings/ConvertedTotal';
 import type { CurrencyOption } from './bindings/CurrencyOption';
 import type { DeletedView } from './bindings/DeletedView';
 import type { Edit } from './bindings/Edit';
@@ -10,6 +11,7 @@ import type { ImportMode } from './bindings/ImportMode';
 import type { ImportSummary } from './bindings/ImportSummary';
 import type { NewSubscription } from './bindings/NewSubscription';
 import type { Overview } from './bindings/Overview';
+import type { RatesOverview } from './bindings/RatesOverview';
 import type { RevisionView } from './bindings/RevisionView';
 import type { SubscriptionDetail } from './bindings/SubscriptionDetail';
 
@@ -50,3 +52,24 @@ export const restoreRevision = (id: string, revision: string): Promise<Subscript
 	invoke('restore_revision', { id, revision });
 
 export const getDeleted = (): Promise<DeletedView[]> => invoke('deleted_subscriptions');
+
+/** The current commitment in `currency`, or in the reporting currency if null. */
+export const getConvertedTotal = (currency: string | null): Promise<ConvertedTotal> =>
+	invoke('converted_total', { currency });
+
+/** Fetches new ECB rates if the cached ones are out of date; how many were stored. */
+export const refreshRates = (): Promise<number> => invoke('refresh_rates');
+
+export const getRates = (): Promise<RatesOverview> => invoke('exchange_rates');
+
+export const addManualRate = (
+	currency: string,
+	date: string,
+	perEur: string
+): Promise<RatesOverview> => invoke('add_manual_rate', { currency, date, perEur });
+
+export const deleteManualRate = (currency: string, date: string): Promise<RatesOverview> =>
+	invoke('delete_manual_rate', { currency, date });
+
+export const setReportingCurrency = (currency: string): Promise<void> =>
+	invoke('set_reporting_currency', { currency });
