@@ -109,6 +109,11 @@ Agreed order for the rest of milestone 1 (2026-11-03):
    total and in the add form, starred from the dashboard; backed up with manual
    exchange rates in backup format version 3.
 6. ~~Hourly exchange rate refresh~~ (done): in the background while the app runs.
+8. **Android build** (2026-11-03, in progress): the Android dev shell, the
+   Android project and release signing are done, and a release APK builds
+   locally. CI (`.github/workflows/android.yml`) hasn't run yet, and the release
+   key doesn't exist yet: the user creates it with `just android-keystore` and
+   adds the GitHub secrets it prints. Not yet tried on a phone; a friend will.
 7. ~~Nix package~~ (done): `nix run github:nicolasdumitru/epicycle`, or in the
    system configuration (see the README). CI builds it.
 

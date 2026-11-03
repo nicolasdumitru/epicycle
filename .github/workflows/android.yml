@@ -1,0 +1,66 @@
+# Android APK for 64-bit ARM phones, built in the Android Nix dev shell.
+#
+# Signed with the release key when the repository has the signing secrets
+# (see scripts/android_keystore.py), so each build installs over the last one.
+# Without them (e.g. pull requests from forks), the APK is unsigned and can't
+# be installed. Download it from the run's "Artifacts".
+name: Android
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+      - name: Gradle cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ hashFiles('crates/app/gen/android/**/*.gradle*', 'crates/app/gen/android/gradle/wrapper/gradle-wrapper.properties') }}
+
+      - name: Signing key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ]; then
+            echo "::warning::No signing secrets: the APK will be unsigned and can't be installed."
+            exit 0
+          fi
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.jks"
+          printf 'storeFile=%s\nkeyAlias=epicycle\npassword=%s\n' \
+            "$RUNNER_TEMP/release.jks" "$KEYSTORE_PASSWORD" \
+            > crates/app/gen/android/keystore.properties
+
+      - name: Frontend dependencies
+        run: nix develop .#android --command pnpm --dir ui install --frozen-lockfile
+
+      - name: Build the APK
+        run: nix develop .#android --command cargo tauri android build --apk --target aarch64
+
+      - name: Upload the APK
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: epicycle-android-${{ github.sha }}
+          path: crates/app/gen/android/app/build/outputs/apk/universal/release/*.apk
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Remove the signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks" crates/app/gen/android/keystore.properties
