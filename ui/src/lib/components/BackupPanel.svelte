@@ -6,6 +6,7 @@
 	import type { ImportSummary } from '#lib/bindings/ImportSummary.ts';
 	import type { Overview } from '#lib/bindings/Overview.ts';
 	import { backupFileName, describeConflict, describeImport } from '#lib/format.ts';
+	import ConfirmDestructive from './ConfirmDestructive.svelte';
 
 	let { onImported }: { onImported: (overview: Overview) => void } = $props();
 
@@ -16,6 +17,8 @@
 	let message = $state<string | null>(null);
 	let error = $state<string | null>(null);
 	let busy = $state(false);
+	// The "replace everything" confirmation is open.
+	let confirmingWipe = $state(false);
 	let panel: HTMLElement | undefined = $state();
 
 	// The preview opens below the buttons, possibly off screen: bring it into view.
@@ -82,6 +85,7 @@
 			const { path, mode } = pending;
 			const result = await importBackup(path, mode);
 			pending = null;
+			confirmingWipe = false;
 			onImported(result.overview);
 			message = [
 				...describeImport(result.summary, true),
@@ -129,8 +133,24 @@
 					<span>
 						Replace
 						<span class="hint">
-							Make this device match the backup. What it replaces stays in each subscription's
-							history.
+							Make this device match the backup. Nothing is lost: what it replaces stays in each
+							subscription's history, where you can restore it.
+						</span>
+					</span>
+				</label>
+				<label class="destructive">
+					<input
+						type="radio"
+						name="import-mode"
+						checked={pending.mode === 'replace_history'}
+						onchange={() => changeMode('replace_history')}
+						disabled={busy}
+					/>
+					<span>
+						Replace everything, including history
+						<span class="hint">
+							Make this device's history exactly the backup's. Changes made here that the backup
+							doesn't have are permanently deleted and can't be restored.
 						</span>
 					</span>
 				</label>
@@ -153,15 +173,41 @@
 
 			<div class="actions">
 				<button class="secondary" onclick={() => (pending = null)} disabled={busy}>Cancel</button>
-				<button
-					class={pending.mode === 'replace' ? 'danger' : ''}
-					onclick={confirmImport}
-					disabled={busy}
-				>
-					{pending.mode === 'replace' ? 'Replace' : 'Merge'}
-				</button>
+				{#if pending.mode === 'replace_history'}
+					<button class="danger" onclick={() => (confirmingWipe = true)} disabled={busy}>
+						Replace everything…
+					</button>
+				{:else}
+					<button onclick={confirmImport} disabled={busy}>
+						{pending.mode === 'replace' ? 'Replace' : 'Merge'}
+					</button>
+				{/if}
 			</div>
 		</div>
+	{/if}
+
+	{#if confirmingWipe && pending}
+		<ConfirmDestructive
+			title="Permanently replace this device's history?"
+			confirmLabel="Replace everything"
+			{busy}
+			onConfirm={confirmImport}
+			onCancel={() => (confirmingWipe = false)}
+		>
+			<p>
+				Everything on this device will be replaced by <strong>{fileName(pending.path)}</strong>,
+				including the history of every change.
+			</p>
+			<ul>
+				{#each describeImport(pending.summary, false) as line (line)}
+					<li>{line}</li>
+				{/each}
+			</ul>
+			<p>
+				<strong>This can't be undone.</strong> If you aren't sure, cancel and export a backup of this
+				device first, or use Replace, which keeps everything in the history.
+			</p>
+		</ConfirmDestructive>
 	{/if}
 
 	{#if message}
@@ -262,5 +308,14 @@
 	ul {
 		margin: 0;
 		padding-left: 1.25rem;
+	}
+
+	.destructive > span {
+		color: var(--danger);
+	}
+
+	.destructive .hint {
+		color: var(--danger);
+		opacity: 0.85;
 	}
 </style>

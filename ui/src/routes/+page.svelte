@@ -122,6 +122,7 @@
 					{/each}
 				</ul>
 			{/if}
+			<a class="deleted-link" href="/deleted">Deleted subscriptions</a>
 		</section>
 
 		<BackupPanel onImported={(updated) => (overview = updated)} />
@@ -200,6 +201,13 @@
 
 	.add {
 		justify-self: start;
+	}
+
+	.deleted-link {
+		display: inline-flex;
+		align-items: center;
+		min-height: 44px;
+		color: var(--muted);
 	}
 
 	ul {

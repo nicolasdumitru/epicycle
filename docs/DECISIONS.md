@@ -127,6 +127,12 @@ separate:
   the newest by ID or by time, which device clocks can't be trusted for.
 - **Importing a backup and, later, syncing devices are the same operation**:
   merging one history into another (see "Backups").
+- **Restoring a version appends it as a new revision** on top of the current one
+  (cause "edited", or "created" for a deleted subscription), so restoring can
+  itself be undone. Deleted subscriptions are listed on their own screen and
+  restored the same way.
+- **The history view compares each revision with its first parent**: for a
+  revision that settled a conflict, that is this device's side.
 
 ### Future direction: syncing devices (not built yet)
 
@@ -192,6 +198,12 @@ automatically.
     version, on top of this device's history (with both parents if they diverged).
   - Settings come from the backup.
   - Anything replaced can be restored from its history.
+- **"Replace everything, including history" is the one exception to keeping
+  data forever** (2026-11-03, at the user's request). It makes this device's
+  history exactly the backup's: revisions only on this device are permanently
+  deleted. The preview counts them, and the confirmation is a modal with a red
+  button that stays disabled for 5 seconds (a ring counts down) next to a
+  prominent Cancel. Plain Replace stays the non-destructive choice.
 
 ## Storage
 

@@ -2,6 +2,7 @@
 // deterministic; the UI passes `undefined` to use the device's locale.
 
 import type { Billing } from './bindings/Billing';
+import type { ChangeView } from './bindings/ChangeView';
 import type { ConflictView } from './bindings/ConflictView';
 import type { ImportSummary } from './bindings/ImportSummary';
 import type { MoneyView } from './bindings/MoneyView';
@@ -124,6 +125,13 @@ export function describeImport(summary: ImportSummary, done: boolean): string[] 
 	const lines = (['added', 'updated', 'removed'] as const)
 		.filter((kind) => summary[kind] > 0)
 		.map((kind) => `${verbs[kind]} ${subscriptions(summary[kind])}.`);
+	if (summary.lostRevisions > 0) {
+		const n = summary.lostRevisions;
+		const changes = n === 1 ? '1 change' : `${n} changes`;
+		lines.push(
+			`${done ? 'Permanently deleted' : 'Permanently deletes'} ${changes} in this device's history that the backup doesn't have.`
+		);
+	}
 	if (lines.length === 0 && summary.conflicts.length === 0) {
 		lines.push(
 			done
@@ -151,4 +159,37 @@ export function backupFileName(now: Date): string {
 	const date = `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
 	const time = `${p(now.getHours())}-${p(now.getMinutes())}-${p(now.getSeconds())}`;
 	return `epicycle-backup-${date}_${time}.json`;
+}
+
+/** "3 Nov 2026, 19:45", in local time, from an RFC 3339 timestamp. */
+export function formatTimestamp(rfc3339: string, locale: Locale): string {
+	return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(
+		new Date(rfc3339)
+	);
+}
+
+/** One line per change in a subscription's history. */
+export function describeChange(change: ChangeView, locale: Locale): string {
+	switch (change.kind) {
+		case 'created':
+			return 'Created';
+		case 'recreated':
+			return 'Restored after being deleted';
+		case 'deleted':
+			return 'Deleted';
+		case 'renamed':
+			return `Renamed from “${change.from}” to “${change.to}”`;
+		case 'notes':
+			return change.notes === '' ? 'Notes removed' : 'Notes changed';
+		case 'plan_set':
+			return `From ${formatDate(change.from, locale)}: ${formatMoney(change.price, locale)}, ${describeBilling(change.billing, change.anchor, locale).toLowerCase()}`;
+		case 'plan_removed':
+			return `Price change from ${formatDate(change.from, locale)} removed`;
+		case 'status_set': {
+			const what = { active: 'Resumed', paused: 'Paused', cancelled: 'Cancelled' }[change.status];
+			return `${what} from ${formatDate(change.from, locale)}`;
+		}
+		case 'status_removed':
+			return `Status change from ${formatDate(change.from, locale)} removed`;
+	}
 }

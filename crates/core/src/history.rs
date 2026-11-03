@@ -216,6 +216,26 @@ impl History {
             .filter_map(|&i| self.revisions[i].subscription.as_ref())
     }
 
+    /// The latest revision that isn't a deletion, following first parents back
+    /// from `revision`. `None` if there is none.
+    pub fn last_version(&self, revision: RevisionId) -> Option<&Revision> {
+        let mut current = self.get(revision)?;
+        while current.subscription.is_none() {
+            current = self.get(*current.parents.first()?)?;
+        }
+        Some(current)
+    }
+
+    /// Subscriptions whose latest revision is a deletion: the deletion, and
+    /// the revision with the version that was deleted.
+    pub fn deleted(&self) -> impl Iterator<Item = (&Revision, &Revision)> {
+        self.heads
+            .values()
+            .map(|&i| &self.revisions[i])
+            .filter(|r| r.subscription.is_none())
+            .filter_map(|r| Some((r, self.last_version(r.id)?)))
+    }
+
     /// Whether `ancestor` is `revision` or one of the revisions it replaced.
     pub fn has_ancestor(&self, revision: RevisionId, ancestor: RevisionId) -> bool {
         let mut stack = vec![revision];
@@ -342,6 +362,42 @@ impl ImportPlan {
 
     fn count(&self, f: impl Fn(&Change) -> bool) -> usize {
         self.changes.iter().filter(|c| f(c)).count()
+    }
+}
+
+/// What replacing this device's whole history with a backup's would do. Unlike
+/// [`plan_import`], nothing is merged: the device ends up with exactly the
+/// backup's history, and revisions only on this device are gone for good.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HistoryReplacement {
+    /// Subscriptions only in the backup.
+    pub added: usize,
+    /// Subscriptions in both, in a different version.
+    pub updated: usize,
+    /// Subscriptions only on this device.
+    pub removed: usize,
+    /// Revisions on this device that the backup doesn't have, which would be
+    /// permanently deleted.
+    pub lost_revisions: usize,
+}
+
+pub fn plan_history_replacement(local: &History, incoming: &History) -> HistoryReplacement {
+    let current = |h: &History| -> BTreeMap<SubscriptionId, Subscription> {
+        h.current().map(|s| (s.id(), s.clone())).collect()
+    };
+    let (before, after) = (current(local), current(incoming));
+    HistoryReplacement {
+        added: after.keys().filter(|id| !before.contains_key(id)).count(),
+        updated: after
+            .iter()
+            .filter(|(id, s)| before.get(id).is_some_and(|b| b != *s))
+            .count(),
+        removed: before.keys().filter(|id| !after.contains_key(id)).count(),
+        lost_revisions: local
+            .revisions()
+            .iter()
+            .filter(|r| incoming.get(r.id) != Some(r))
+            .count(),
     }
 }
 
@@ -531,6 +587,35 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn replacing_the_history_counts_what_is_lost() {
+        let mut b = Builder::new();
+        let (a, c, d) = (sub("A"), sub("C"), sub("D"));
+        let a1 = b.create(&a);
+        let a2 = b.edit(&a1, &a.renamed("A2").unwrap());
+        let c1 = b.create(&c);
+        let d1 = b.create(&d);
+        // This device renamed A and created C; the backup only has A's first
+        // version and D.
+        let local = history(&[&a1, &a2, &c1]);
+        let backup = history(&[&a1, &d1]);
+        assert_eq!(
+            plan_history_replacement(&local, &backup),
+            HistoryReplacement {
+                added: 1,
+                updated: 1,
+                removed: 1,
+                lost_revisions: 2,
+            }
+        );
+        // Nothing is lost when the backup already has everything.
+        let same = plan_history_replacement(&local, &local);
+        assert_eq!(
+            same.lost_revisions + same.added + same.updated + same.removed,
+            0
+        );
+    }
+
+    #[test]
     fn orders_parents_first_and_finds_heads() {
         let mut b = Builder::new();
         let a = sub("A");
@@ -556,6 +641,8 @@ pub(crate) mod tests {
         let h = history(&[&r1, &r2]);
         assert_eq!(h.current().count(), 0);
         assert_eq!(h.head(r1.subscription_id), Some(&r2));
+        let deleted: Vec<_> = h.deleted().map(|(d, v)| (d.id, v.id)).collect();
+        assert_eq!(deleted, [(r2.id, r1.id)]);
     }
 
     #[test]

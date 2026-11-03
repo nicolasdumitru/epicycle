@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	backupFileName,
+	describeChange,
 	daysBetween,
 	describeBilling,
 	describeConflict,
@@ -83,12 +84,18 @@ describe('describeBilling', () => {
 });
 
 describe('describeImport', () => {
-	const none = { added: 0, updated: 0, removed: 0, conflicts: [] };
+	const none = { added: 0, updated: 0, removed: 0, conflicts: [], lostRevisions: 0 };
 
 	it('lists each kind of change, in the right tense', () => {
 		const summary = { ...none, added: 2, removed: 1 };
 		expect(describeImport(summary, false)).toEqual(['Adds 2 subscriptions.', 'Removes 1 subscription.']);
 		expect(describeImport(summary, true)).toEqual(['Added 2 subscriptions.', 'Removed 1 subscription.']);
+	});
+
+	it('warns about history that would be lost', () => {
+		expect(describeImport({ ...none, lostRevisions: 3 }, false)).toEqual([
+			"Permanently deletes 3 changes in this device's history that the backup doesn't have."
+		]);
 	});
 
 	it('says when there is nothing to do', () => {
@@ -111,6 +118,30 @@ describe('backupFileName', () => {
 	it('includes the local date and time, padded', () => {
 		expect(backupFileName(new Date(2026, 10, 3, 9, 5, 7))).toBe(
 			'epicycle-backup-2026-11-03_09-05-07.json'
+		);
+	});
+});
+
+describe('describeChange', () => {
+	it('describes each kind of change', () => {
+		expect(describeChange({ kind: 'renamed', from: 'Music', to: 'Music Family' }, en)).toBe(
+			'Renamed from “Music” to “Music Family”'
+		);
+		expect(describeChange({ kind: 'notes', notes: '' }, en)).toBe('Notes removed');
+		expect(
+			describeChange(
+				{
+					kind: 'plan_set',
+					from: '2026-12-01',
+					price: { amount: '12.50', currency: 'EUR' },
+					billing: { unit: 'months', every: 1, day: 15 },
+					anchor: '2026-12-15'
+				},
+				en
+			)
+		).toBe('From 1 Dec 2026: €12.50, monthly on the 15th');
+		expect(describeChange({ kind: 'status_set', from: '2027-01-01', status: 'paused' }, en)).toBe(
+			'Paused from 1 Jan 2027'
 		);
 	});
 });

@@ -3,4 +3,4 @@
 /**
  * How to import a backup.
  */
-export type ImportMode = "merge" | "replace";
+export type ImportMode = "merge" | "replace" | "replace_history";

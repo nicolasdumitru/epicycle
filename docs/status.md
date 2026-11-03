@@ -95,10 +95,11 @@ design, DECISIONS.md has the details.
 Agreed order for the rest of milestone 1 (2026-11-03):
 
 1. ~~Currency and date inputs~~ (done).
-2. **Editing subscriptions with notes**: rename, notes, change price (adds a plan
-   from a date), pause, resume, cancel. The domain crate supports all of these
-   except notes; the UI only adds and deletes.
-3. **History view** with restore, and the two Replace modes (see above).
+2. ~~Editing subscriptions with notes~~ (done): each subscription has its own
+   screen for name, notes, price or billing changes from a date, pausing,
+   resuming, cancelling and deleting.
+3. ~~History view~~ (done): on each subscription's screen, with restore; a
+   screen for deleted subscriptions; the two Replace modes.
 4. **Exchange rates and the converted total**. The domain logic exists
    (`crates/core/src/fx.rs`); nothing fetches or stores rates yet.
 
