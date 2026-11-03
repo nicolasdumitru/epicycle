@@ -147,7 +147,7 @@
 			{/if}
 		</section>
 
-		<BackupPanel today={overview.today} onImported={(updated) => (overview = updated)} />
+		<BackupPanel onImported={(updated) => (overview = updated)} />
 	{:else if !error}
 		<p class="muted">Loading…</p>
 	{/if}
