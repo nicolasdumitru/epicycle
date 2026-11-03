@@ -26,3 +26,22 @@ sqlx-prepare:
 # Install frontend dependencies; quick when they already match the lockfile.
 deps:
     pnpm --dir ui install --frozen-lockfile
+
+# Android commands run in the Android dev shell (nix develop .#android), so
+# they work from the default shell too. APKs are for 64-bit ARM phones.
+
+# Run on a connected Android phone (USB debugging on) or a running emulator.
+android-dev:
+    nix develop .#android --command cargo tauri android dev
+
+# Build a debug APK, signed with this machine's Android debug key.
+android-debug:
+    nix develop .#android --command cargo tauri android build --debug --apk --target aarch64
+
+# Build a release APK, signed if crates/app/gen/android/keystore.properties exists.
+android-release:
+    nix develop .#android --command cargo tauri android build --apk --target aarch64
+
+# Create the release signing key, once (see scripts/android_keystore.py).
+android-keystore:
+    nix develop .#android --command python3 scripts/android_keystore.py
