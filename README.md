@@ -62,7 +62,7 @@ Android work uses a second dev shell with the Android SDK and NDK added:
 ```sh
 just android-debug     # debug APK, for this machine's own testing
 just android-release   # release APK (signed once a key is set up)
-just android-emulator  # start a virtual phone (Android 16), then:
+just android-emulator  # start a virtual Pixel 10 (Android 16), then:
 just android-dev       # run on a connected phone or a running emulator
 just android-keystore  # create the release signing key, once
 ```

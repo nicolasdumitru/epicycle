@@ -98,7 +98,8 @@
         # pieces: the SDK lives in the read-only Nix store.
         androidBuildTools = "37.0.0";
         androidNdk = "29.0.14206865";
-        androidComposition = (pkgs.androidenv.override { licenseAccepted = true; }).composeAndroidPackages {
+        androidenv = pkgs.androidenv.override { licenseAccepted = true; };
+        androidComposition = androidenv.composeAndroidPackages {
           platformVersions = [
             "36"
             "37"
@@ -132,25 +133,33 @@
           default = epicycle;
         }
         // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
-          # An Android phone emulator: `nix run .#android-emulator`. Separate
-          # from the Android shell so CI doesn't download the system image. The
-          # virtual phone is kept in ~/.local/share/epicycle-android-emulator,
-          # so its data survives restarts. Needs KVM.
-          android-emulator = (pkgs.androidenv.override { licenseAccepted = true; }).emulateApp {
-            name = "epicycle-android-emulator";
-            platformVersion = "36";
-            abiVersion = "x86_64";
-            systemImageType = "google_apis";
-            deviceName = "epicycle";
-            androidUserHome = "$HOME/.local/share/epicycle-android-emulator";
-            configOptions = {
-              # The computer's GPU and keyboard, for speed and for typing
-              # into fields as on a phone with a keyboard.
-              "hw.gpu.enabled" = "yes";
-              "hw.gpu.mode" = "auto";
-              "hw.keyboard" = "yes";
-            };
-          };
+          # An Android phone emulator, a Pixel 10 with Android 16:
+          # `nix run .#android-emulator` (see nix/android_emulator.py). Separate
+          # from the Android shell so CI doesn't download the phone image.
+          # nixpkgs' emulateApp isn't used: it pins command-line tools too old
+          # to know recent phones. Needs KVM.
+          android-emulator =
+            let
+              sdk =
+                (androidenv.composeAndroidPackages {
+                  cmdLineToolsVersion = "22.0";
+                  includeEmulator = true;
+                  includeSystemImages = true;
+                  platformVersions = [ "36" ];
+                  systemImageTypes = [ "google_apis" ];
+                  abiVersions = [ "x86_64" ];
+                }).androidsdk;
+            in
+            pkgs.writers.writePython3Bin "epicycle-android-emulator"
+              {
+                # Long command lines read better unwrapped.
+                flakeIgnore = [ "E501" ];
+              }
+              (
+                builtins.replaceStrings [ "@sdk@" ] [ "${sdk}/libexec/android-sdk" ] (
+                  builtins.readFile ./nix/android_emulator.py
+                )
+              );
         };
 
         devShells = {
