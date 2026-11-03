@@ -121,7 +121,6 @@ Later, not yet agreed:
 - **iOS build**: find a Mac (for example a remote build service), then go through
   the specification's platform validation checklist on a real iPhone, including
   the document picker for backups.
-- **CI** on GitHub Actions: `just check` and `just test`.
 - **Upcoming payments** list and the **monthly chart** (scheduled cash flow vs
   monthly-equivalent commitment, kept visibly separate).
 - **Nix package** for installing the app on NixOS (`nix run`, or in the system
@@ -129,13 +128,17 @@ Later, not yet agreed:
 
 ## Open questions
 
-- **iOS builds in CI** (2026-11-03): nothing iOS-specific exists yet (no
-  `crates/app/gen/apple`, no CI at all). The plan is GitHub Actions on a macOS
-  runner: first a build for the simulator, which needs no Apple account and
-  proves the app compiles for iOS; then signed builds installed on the iPhone.
-  That second step needs a decision: the Apple Developer Program (paid yearly;
-  CI uploads to TestFlight, installs last 90 days), or a free Apple ID (apps
-  expire after 7 days and must be re-signed, e.g. with SideStore). The
-  repository is public, so GitHub's macOS runners cost nothing.
+- **iOS builds in CI** (2026-11-03). Step 1 is in `.github/workflows/ios.yml`
+  and hasn't run yet: the Rust code built for iPhone and simulator, and the
+  whole app built for the simulator through Tauri's generated Xcode project. No
+  Mac is needed: the Xcode project (`crates/app/gen/apple`) is generated on
+  GitHub's macOS runner, free for this public repository, and uploaded as an
+  artifact. It may be committed later, as Tauri suggests.
+  Step 2, agreed: a free Apple ID. CI would build an unsigned `.ipa`; SideStore
+  on the iPhone signs it with the Apple ID and re-signs it before the 7 days
+  run out, which an iOS Shortcuts automation can trigger, so there's no weekly
+  manual signing and no Apple credentials in CI. Not yet known: whether Tauri's
+  project builds unsigned (Tauri expects a signing team; the fallback is
+  `xcodebuild` with signing turned off).
 
 - Sync through cloud drives: if wanted, when, and which providers first?
