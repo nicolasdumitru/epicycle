@@ -88,6 +88,10 @@
           shellHook = ''
             # Lets the webview find TLS support (needed for HTTPS requests).
             export GIO_MODULE_DIR="${pkgs.glib-networking}/lib/gio/modules/"
+            # GTK's file chooser (used by the dialog plugin) aborts without its
+            # GSettings schemas. Nix packages get these from wrapGAppsHook; the
+            # dev shell has to point at them itself.
+            export XDG_DATA_DIRS="${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}''${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
           '';
         };
       }
