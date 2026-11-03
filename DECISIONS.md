@@ -29,9 +29,9 @@ Newest decisions are appended at the end of each section.
 ## Platforms
 
 - Validation order: **NixOS desktop, then iOS**, then iPadOS, Windows, macOS, Android.
-- iOS builds need macOS with Xcode. We have no Mac yet; a remote macOS build machine
-  or a friend's Mac will be used. The Android SDK stays out of the flake until Android
-  work starts.
+- iOS builds need macOS with Xcode, which isn't available yet; a remote macOS build
+  machine will be used. The Android SDK stays out of the flake until Android work
+  starts.
 
 ## Domain
 
@@ -131,7 +131,7 @@ syncing needs. What's missing is moving the history between devices
 automatically.
 
 - **Under consideration: syncing through storage the user already has** (Nextcloud,
-  iCloud Drive, Google Drive), instead of a paid sync service. If we do this, the
+  iCloud Drive, Google Drive). If we do this, the
   SQLite database must never sit in the synced folder: file-sync tools copy whole
   files without locking, and two devices writing to one database corrupt it or
   leave "conflicted copy" files. What would sync is the history: each device
