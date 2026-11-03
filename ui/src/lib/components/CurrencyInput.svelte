@@ -1,7 +1,10 @@
 <script lang="ts">
-	// A combobox for ISO 4217 currencies: type a code or part of a name, pick
-	// from the list. Only listed currencies are accepted, and a code typed in any
-	// case ("ron") becomes the listed one ("RON").
+	// A combobox for ISO 4217 currencies. Typing searches by code or name, best
+	// match first. Opening it without typing shows the whole list in code order,
+	// scrolled to the current currency, so it works well with a mouse alone.
+	// Only listed currencies are accepted, and a code typed in any case ("ron")
+	// becomes the listed one ("RON").
+	import { tick } from 'svelte';
 	import type { CurrencyOption } from '#lib/bindings/CurrencyOption.ts';
 	import { findCurrency, matchCurrencies } from '#lib/inputs.ts';
 
@@ -15,10 +18,13 @@
 	// svelte-ignore state_referenced_locally (only the initial value is wanted)
 	let text = $state(value);
 	let open = $state(false);
+	// True once the user types; false while browsing the whole list.
+	let searching = $state(false);
 	let active = $state(0);
 	let input: HTMLInputElement | undefined = $state();
+	let list: HTMLUListElement | undefined = $state();
 
-	const matches = $derived(matchCurrencies(options, text).slice(0, 50));
+	const matches = $derived(searching ? matchCurrencies(options, text) : options);
 	const selected = $derived(findCurrency(options, value));
 
 	// Block form submission until a listed currency is chosen.
@@ -32,10 +38,38 @@
 		value = option.code;
 		text = option.code;
 		open = false;
+		searching = false;
+	}
+
+	// Centres the active option in the list, without scrolling the page.
+	function scrollToActive(centre: boolean) {
+		const item = list?.children[active] as HTMLElement | undefined;
+		if (!list || !item) return;
+		if (centre) {
+			list.scrollTop = item.offsetTop - (list.clientHeight - item.offsetHeight) / 2;
+		} else if (item.offsetTop < list.scrollTop) {
+			list.scrollTop = item.offsetTop;
+		} else if (item.offsetTop + item.offsetHeight > list.scrollTop + list.clientHeight) {
+			list.scrollTop = item.offsetTop + item.offsetHeight - list.clientHeight;
+		}
+	}
+
+	/** Opens the whole list with the current currency highlighted. */
+	async function browse() {
+		if (open) return;
+		searching = false;
+		open = true;
+		active = Math.max(
+			options.findIndex((o) => o.code === value),
+			0
+		);
+		await tick();
+		scrollToActive(true);
 	}
 
 	function oninput() {
 		open = true;
+		searching = true;
 		active = 0;
 		// An exact code is chosen as soon as it's typed, without needing Enter.
 		value = findCurrency(options, text)?.code ?? '';
@@ -45,12 +79,12 @@
 		if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
 			event.preventDefault();
 			if (!open) {
-				open = true;
+				browse();
 				return;
 			}
 			const step = event.key === 'ArrowDown' ? 1 : -1;
 			active = (active + step + matches.length) % Math.max(matches.length, 1);
-			document.getElementById(`${id}-option-${active}`)?.scrollIntoView({ block: 'nearest' });
+			scrollToActive(false);
 		} else if (event.key === 'Enter' && open) {
 			const option = matches[active];
 			if (!option) return;
@@ -65,6 +99,12 @@
 
 	function onblur() {
 		open = false;
+		if (!searching) {
+			// Browsing without typing leaves the choice as it was.
+			text = value;
+			return;
+		}
+		searching = false;
 		const exact = findCurrency(options, text);
 		// A unique match by name counts too: "leu" alone is ambiguous, "romanian" isn't.
 		const only = matches.length === 1 ? matches[0] : undefined;
@@ -84,7 +124,7 @@
 			{onkeydown}
 			{onblur}
 			onfocus={() => input?.select()}
-			onclick={() => (open = true)}
+			onclick={browse}
 			role="combobox"
 			aria-expanded={open}
 			aria-controls="{id}-list"
@@ -97,13 +137,14 @@
 			required
 		/>
 		{#if open && matches.length > 0}
-			<ul id="{id}-list" role="listbox" aria-label={label}>
+			<ul id="{id}-list" role="listbox" aria-label={label} bind:this={list}>
 				{#each matches as option, i (option.code)}
 					<li
 						id="{id}-option-{i}"
 						role="option"
 						aria-selected={i === active}
 						class:active={i === active}
+						class:current={option.code === value}
 						onpointerdown={(e) => {
 							// Keep focus in the input so blur doesn't close the list first.
 							e.preventDefault();
@@ -163,6 +204,10 @@
 		border-radius: 0.375rem;
 		cursor: pointer;
 		font-weight: 400;
+	}
+
+	li.current {
+		font-weight: 600;
 	}
 
 	li.active {
