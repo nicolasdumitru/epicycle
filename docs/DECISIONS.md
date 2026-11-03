@@ -70,13 +70,17 @@ Newest decisions are appended at the end of each section.
     release builds or the other way round.
   - APKs target 64-bit ARM only, which covers current phones; other targets
     can be added to the build command if needed.
-  - **The emulator is a separate flake package, on trial** (2026-11-04)
-    (`nix run .#android-emulator`, a Pixel 10 with Android 16), not part of
-    the Android shell, so CI doesn't download the system image. It is a small
-    launcher of our own (`nix/android_emulator.py`) rather than nixpkgs'
-    `emulateApp`, which pins command-line tools too old to know phones after
-    the Pixel 6. It was removed in favour of Android Studio and brought back to
-    try again; it may go again.
+  - **The emulator is a separate flake package** (`nix run .#android-emulator`,
+    a Pixel 10 with Android 16), not part of the Android shell, so CI doesn't
+    download the system image. It is a small launcher of our own
+    (`nix/android_emulator.py`) rather than nixpkgs' `emulateApp`, which pins
+    command-line tools too old to know phones after the Pixel 6. It was briefly
+    removed in favour of Android Studio and brought back (2026-11-04).
+  - **The emulator starts without Vulkan passthrough** (`-feature -Vulkan`):
+    with it, Android's WebView hung initialising Vulkan on the host GPU, and
+    the app froze on a white screen. OpenGL still uses the GPU. If graphics
+    misbehave anyway, `just android-emulator -gpu swiftshader_indirect`
+    renders in software.
   - **Safe areas on Android are handled natively** (2026-11-03): the app draws
     edge to edge, but Android's WebView reports 0 for CSS
     `env(safe-area-inset-*)`. `MainActivity` pads the content by the status
