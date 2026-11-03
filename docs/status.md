@@ -134,11 +134,9 @@ Later, not yet agreed:
   Mac is needed: the Xcode project (`crates/app/gen/apple`) is generated on
   GitHub's macOS runner, free for this public repository, and uploaded as an
   artifact. It may be committed later, as Tauri suggests.
-  Step 2, agreed: a free Apple ID. CI would build an unsigned `.ipa`; SideStore
-  on the iPhone signs it with the Apple ID and re-signs it before the 7 days
-  run out, which an iOS Shortcuts automation can trigger, so there's no weekly
-  manual signing and no Apple credentials in CI. Not yet known: whether Tauri's
-  project builds unsigned (Tauri expects a signing team; the fallback is
-  `xcodebuild` with signing turned off).
+  Step 2, open (2026-11-03): the user wants cloud builds installed through
+  TestFlight, without third-party tools such as SideStore. TestFlight needs the
+  paid Apple Developer Program; a free Apple ID can't upload builds. Waiting on
+  whether to join it.
 
 - Sync through cloud drives: if wanted, when, and which providers first?
