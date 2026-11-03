@@ -5,7 +5,9 @@
 	import type { SubscriptionView } from '#lib/bindings/SubscriptionView.ts';
 	import AddSubscription from '#lib/components/AddSubscription.svelte';
 	import BackupPanel from '#lib/components/BackupPanel.svelte';
+	import MonthlyChart from '#lib/components/MonthlyChart.svelte';
 	import TotalCard from '#lib/components/TotalCard.svelte';
+	import UpcomingPayments from '#lib/components/UpcomingPayments.svelte';
 	import {
 		daysBetween,
 		describeBilling,
@@ -22,6 +24,10 @@
 	let overview = $state<Overview | null>(null);
 	let error = $state<string | null>(null);
 	let adding = $state(false);
+	// The currency totals and the chart are shown in, chosen on the total card.
+	let currency = $state('');
+	// Goes up when exchange rates or the default currency change.
+	let ratesVersion = $state(0);
 
 	const statusLabels: Record<SubscriptionView['status'], string> = {
 		active: 'Active',
@@ -49,7 +55,16 @@
 	{/if}
 
 	{#if overview}
-		<TotalCard monthlyByCurrency={overview.monthlyTotal} reloadKey={overview} />
+		<TotalCard
+			monthlyByCurrency={overview.monthlyTotal}
+			reloadKey={overview}
+			bind:currency
+			bind:ratesVersion
+		/>
+
+		<UpcomingPayments today={overview.today} reloadKey={overview} />
+
+		<MonthlyChart {currency} reloadKey={[overview, ratesVersion]} />
 
 		{#if adding}
 			<AddSubscription
@@ -119,6 +134,12 @@
 		padding: 1rem;
 		display: grid;
 		gap: 1.25rem;
+	}
+
+	/* Grid items default to their content's minimum width, which would let a
+	   wide card (or the chart) push the column past a phone's screen. */
+	main > :global(*) {
+		min-width: 0;
 	}
 
 	h1 {

@@ -11,6 +11,14 @@ Newest decisions are appended at the end of each section.
   navigation needs. TypeScript types for domain data will be generated from the Rust
   types with `ts-rs`, so Rust remains the single source of truth.
 - **Charts are hand-written SVG** until a chart library clearly earns its place.
+- **The monthly chart** (2026-11-03) puts what is paid in each month (columns,
+  scheduled cash flow) and the monthly equivalent of what is active (a line,
+  commitment) on one axis, in the dashboard's currency. It covers six months
+  back to six ahead; past months are estimates, drawn lighter and labelled as
+  such. Commitment is taken on each month's first day (today, for the current
+  month), and each month is converted with the rates nearest its date. Colours
+  are the dataviz reference palette's first two slots, validated against the
+  app's light and dark surfaces. Every value is also in a table view.
 - **pnpm**, with every version pinned exactly and `minimumReleaseAge` set to 7 days
   (`ui/pnpm-workspace.yaml`). An urgent security fix can be exempted via
   `minimumReleaseAgeExclude`.

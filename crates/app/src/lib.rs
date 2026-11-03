@@ -1,4 +1,5 @@
 pub mod commands;
+pub mod dashboard;
 pub mod db;
 pub mod history_view;
 pub mod rates;
@@ -40,6 +41,8 @@ pub fn run() {
             commands::set_reporting_currency,
             commands::favorite_currencies,
             commands::set_favorite_currencies,
+            dashboard::upcoming_payments,
+            dashboard::monthly_chart,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Epicycle");
