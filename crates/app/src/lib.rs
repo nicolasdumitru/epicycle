@@ -6,17 +6,19 @@ pub mod rates;
 
 use tauri::Manager;
 
-use crate::db::Db;
+use crate::db::{Db, DbHandle};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        // Registered before the database is open; see DbHandle.
+        .manage(DbHandle::default())
         .setup(|app| {
             let dir = app.path().app_data_dir()?;
             std::fs::create_dir_all(&dir)?;
             let db = tauri::async_runtime::block_on(Db::open(&dir.join("epicycle.sqlite3")))?;
-            app.manage(db);
+            app.state::<DbHandle>().set(db);
             rates::spawn_refresher(app.handle().clone());
             Ok(())
         })

@@ -52,6 +52,25 @@ fn corrupt(what: impl std::fmt::Display) -> DbError {
     DbError::Corrupt(what.to_string())
 }
 
+/// The database, once it is open. Registered with Tauri before start-up opens
+/// the database, so commands always find it: on Android the web view can call
+/// commands while start-up is still running, and they wait here instead of
+/// failing with "state not managed".
+#[derive(Default)]
+pub struct DbHandle(tokio::sync::SetOnce<Db>);
+
+impl DbHandle {
+    /// Makes the database available; only the first call has an effect.
+    pub fn set(&self, db: Db) {
+        let _ = self.0.set(db);
+    }
+
+    /// The database, waiting until start-up has opened it.
+    pub async fn ready(&self) -> &Db {
+        self.0.wait().await
+    }
+}
+
 pub struct Db {
     pool: SqlitePool,
     device_id: Uuid,

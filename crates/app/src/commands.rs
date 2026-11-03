@@ -21,7 +21,7 @@ use tauri::State;
 use ts_rs::TS;
 use uuid::Uuid;
 
-use crate::db::Db;
+use crate::db::{Db, DbHandle};
 use crate::history_view::{DeletedView, RevisionView, history_view};
 use epicycle_core::fx::{self, Freshness, Rate, RateSource, RateTable};
 use epicycle_core::history::{History, RevisionId};
@@ -728,7 +728,8 @@ pub fn today() -> Date {
 }
 
 #[tauri::command]
-pub async fn overview(db: State<'_, Db>) -> Result<Overview, CommandError> {
+pub async fn overview(db: State<'_, DbHandle>) -> Result<Overview, CommandError> {
+    let db = db.ready().await;
     overview_of(&db.subscriptions().await?, today())
 }
 
@@ -736,9 +737,10 @@ pub async fn overview(db: State<'_, Db>) -> Result<Overview, CommandError> {
 /// currency if none is given.
 #[tauri::command]
 pub async fn converted_total(
-    db: State<'_, Db>,
+    db: State<'_, DbHandle>,
     currency: Option<String>,
 ) -> Result<ConvertedTotal, CommandError> {
+    let db = db.ready().await;
     let default = db.reporting_currency().await?;
     let to = match currency.as_deref() {
         Some(code) => currency_in_use(code)?,
@@ -756,13 +758,18 @@ pub async fn converted_total(
 /// Fetches new ECB rates if the cached ones are out of date. Returns how many
 /// were stored; fails quietly-worded when offline.
 #[tauri::command]
-pub async fn refresh_rates(db: State<'_, Db>) -> Result<u32, CommandError> {
-    let stored = crate::rates::refresh(&db, today()).await?;
+pub async fn refresh_rates(db: State<'_, DbHandle>) -> Result<u32, CommandError> {
+    let db = db.ready().await;
+    let stored = crate::rates::refresh(db, today()).await?;
     Ok(u32::try_from(stored).unwrap_or(u32::MAX))
 }
 
 #[tauri::command]
-pub async fn exchange_rates(db: State<'_, Db>) -> Result<RatesOverview, CommandError> {
+pub async fn exchange_rates(db: State<'_, DbHandle>) -> Result<RatesOverview, CommandError> {
+    exchange_rates_of(db.ready().await).await
+}
+
+async fn exchange_rates_of(db: &Db) -> Result<RatesOverview, CommandError> {
     Ok(rates_overview(
         &db.rates().await?,
         db.reporting_currency().await?,
@@ -772,30 +779,36 @@ pub async fn exchange_rates(db: State<'_, Db>) -> Result<RatesOverview, CommandE
 
 #[tauri::command]
 pub async fn add_manual_rate(
-    db: State<'_, Db>,
+    db: State<'_, DbHandle>,
     currency: String,
     date: String,
     per_eur: String,
 ) -> Result<RatesOverview, CommandError> {
+    let db = db.ready().await;
     let rate = manual_rate(&currency, &date, &per_eur, jiff::Timestamp::now())?;
     db.save_rates(&[rate]).await?;
-    exchange_rates(db).await
+    exchange_rates_of(db).await
 }
 
 #[tauri::command]
 pub async fn delete_manual_rate(
-    db: State<'_, Db>,
+    db: State<'_, DbHandle>,
     currency: String,
     date: String,
 ) -> Result<RatesOverview, CommandError> {
+    let db = db.ready().await;
     db.delete_manual_rate(currency.parse()?, parse_date(&date, "Date")?)
         .await?;
-    exchange_rates(db).await
+    exchange_rates_of(db).await
 }
 
 /// Favourite currencies, in the user's order.
 #[tauri::command]
-pub async fn favorite_currencies(db: State<'_, Db>) -> Result<Vec<String>, CommandError> {
+pub async fn favorite_currencies(db: State<'_, DbHandle>) -> Result<Vec<String>, CommandError> {
+    favorite_currencies_of(db.ready().await).await
+}
+
+async fn favorite_currencies_of(db: &Db) -> Result<Vec<String>, CommandError> {
     Ok(db
         .favorites()
         .await?
@@ -806,22 +819,24 @@ pub async fn favorite_currencies(db: State<'_, Db>) -> Result<Vec<String>, Comma
 
 #[tauri::command]
 pub async fn set_favorite_currencies(
-    db: State<'_, Db>,
+    db: State<'_, DbHandle>,
     currencies: Vec<String>,
 ) -> Result<Vec<String>, CommandError> {
+    let db = db.ready().await;
     let favorites = currencies
         .iter()
         .map(|c| currency_in_use(c))
         .collect::<Result<Vec<_>, _>>()?;
     db.set_favorites(&favorites).await?;
-    favorite_currencies(db).await
+    favorite_currencies_of(db).await
 }
 
 #[tauri::command]
 pub async fn set_reporting_currency(
-    db: State<'_, Db>,
+    db: State<'_, DbHandle>,
     currency: String,
 ) -> Result<(), CommandError> {
+    let db = db.ready().await;
     db.set_reporting_currency(currency_in_use(&currency)?)
         .await?;
     Ok(())
@@ -841,9 +856,10 @@ pub fn currencies() -> Vec<CurrencyOption> {
 
 #[tauri::command]
 pub async fn add_subscription(
-    db: State<'_, Db>,
+    db: State<'_, DbHandle>,
     form: NewSubscription,
 ) -> Result<Overview, CommandError> {
+    let db = db.ready().await;
     let today = today();
     db.save(&new_subscription(&form, today)?).await?;
     overview_of(&db.subscriptions().await?, today)
@@ -860,32 +876,39 @@ async fn find(db: &Db, id: &str) -> Result<Subscription, CommandError> {
 
 #[tauri::command]
 pub async fn subscription(
-    db: State<'_, Db>,
+    db: State<'_, DbHandle>,
     id: String,
 ) -> Result<SubscriptionDetail, CommandError> {
-    detail_of(&find(&db, &id).await?, today())
+    let db = db.ready().await;
+    detail_of(&find(db, &id).await?, today())
 }
 
 #[tauri::command]
 pub async fn edit_subscription(
-    db: State<'_, Db>,
+    db: State<'_, DbHandle>,
     id: String,
     edit: Edit,
 ) -> Result<SubscriptionDetail, CommandError> {
-    let edited = apply_edit(&find(&db, &id).await?, &edit)?;
+    let db = db.ready().await;
+    let edited = apply_edit(&find(db, &id).await?, &edit)?;
     db.save(&edited).await?;
     detail_of(&edited, today())
 }
 
 #[tauri::command]
-pub async fn delete_subscription(db: State<'_, Db>, id: String) -> Result<Overview, CommandError> {
+pub async fn delete_subscription(
+    db: State<'_, DbHandle>,
+    id: String,
+) -> Result<Overview, CommandError> {
+    let db = db.ready().await;
     let id = SubscriptionId(Uuid::parse_str(&id)?);
     db.delete(id).await?;
     overview_of(&db.subscriptions().await?, today())
 }
 
 #[tauri::command]
-pub async fn export_backup(db: State<'_, Db>, path: String) -> Result<(), CommandError> {
+pub async fn export_backup(db: State<'_, DbHandle>, path: String) -> Result<(), CommandError> {
+    let db = db.ready().await;
     let json = db.export().await?.to_json();
     write_replacing(Path::new(&path), json.as_bytes())
         .map_err(|e| CommandError(format!("Couldn't save the backup: {e}")))
@@ -909,10 +932,11 @@ fn read_backup(path: &str) -> Result<Backup, CommandError> {
 /// What importing the backup at `path` would do, without changing anything.
 #[tauri::command]
 pub async fn preview_import(
-    db: State<'_, Db>,
+    db: State<'_, DbHandle>,
     path: String,
     mode: ImportMode,
 ) -> Result<ImportSummary, CommandError> {
+    let db = db.ready().await;
     let backup = read_backup(&path)?;
     Ok(match mode {
         ImportMode::Merge | ImportMode::Replace => {
@@ -936,10 +960,11 @@ fn history_mode(mode: ImportMode) -> history::ImportMode {
 
 #[tauri::command]
 pub async fn import_backup(
-    db: State<'_, Db>,
+    db: State<'_, DbHandle>,
     path: String,
     mode: ImportMode,
 ) -> Result<Imported, CommandError> {
+    let db = db.ready().await;
     let backup = read_backup(&path)?;
     let summary = match mode {
         ImportMode::Merge | ImportMode::Replace => {
@@ -965,9 +990,10 @@ fn parse_id<T>(text: &str, wrap: impl Fn(Uuid) -> T) -> Result<T, CommandError> 
 /// subscriptions too.
 #[tauri::command]
 pub async fn subscription_history(
-    db: State<'_, Db>,
+    db: State<'_, DbHandle>,
     id: String,
 ) -> Result<Vec<RevisionView>, CommandError> {
+    let db = db.ready().await;
     let id = parse_id(&id, SubscriptionId)?;
     let history = History::new(db.history(id).await?)?;
     Ok(history_view(&history, db.device_id()))
@@ -976,10 +1002,11 @@ pub async fn subscription_history(
 /// Makes an earlier version of a subscription current again.
 #[tauri::command]
 pub async fn restore_revision(
-    db: State<'_, Db>,
+    db: State<'_, DbHandle>,
     id: String,
     revision: String,
 ) -> Result<SubscriptionDetail, CommandError> {
+    let db = db.ready().await;
     let restored = db
         .restore(
             parse_id(&id, SubscriptionId)?,
@@ -991,7 +1018,10 @@ pub async fn restore_revision(
 
 /// Deleted subscriptions, most recently deleted first.
 #[tauri::command]
-pub async fn deleted_subscriptions(db: State<'_, Db>) -> Result<Vec<DeletedView>, CommandError> {
+pub async fn deleted_subscriptions(
+    db: State<'_, DbHandle>,
+) -> Result<Vec<DeletedView>, CommandError> {
+    let db = db.ready().await;
     let mut views = Vec::new();
     for (deletion, version) in db.deleted().await? {
         let Some(s) = &version.subscription else {

@@ -920,6 +920,7 @@ dependencies = [
  "tokio",
  "ts-rs",
  "uuid",
+ "webpki-root-certs",
 ]
 
 [[package]]
