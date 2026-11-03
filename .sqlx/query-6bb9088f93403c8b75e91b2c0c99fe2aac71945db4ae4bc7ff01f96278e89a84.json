@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM subscriptions",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "6bb9088f93403c8b75e91b2c0c99fe2aac71945db4ae4bc7ff01f96278e89a84"
+}

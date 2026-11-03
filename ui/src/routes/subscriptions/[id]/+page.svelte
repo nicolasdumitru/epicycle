@@ -9,6 +9,7 @@
 	import type { SubscriptionDetail } from '#lib/bindings/SubscriptionDetail.ts';
 	import type { Unit } from '#lib/bindings/Unit.ts';
 	import DateInput from '#lib/components/DateInput.svelte';
+	import HistoryList from '#lib/components/HistoryList.svelte';
 	import {
 		billingUnits,
 		describeBilling,
@@ -302,6 +303,17 @@
 						{/if}
 					</div>
 				{/if}
+			</div>
+		</section>
+
+		<section aria-labelledby="history-heading">
+			<h2 id="history-heading">History</h2>
+			<div class="card">
+				<p class="muted">
+					Every change is kept. Restoring an earlier version adds it as a new change, so you can
+					always go back again.
+				</p>
+				<HistoryList {id} reloadKey={detail} onRestored={show} />
 			</div>
 		</section>
 

@@ -10,7 +10,7 @@ use std::path::Path;
 
 use epicycle_core::backup::Backup;
 use epicycle_core::commitment::{commitment_on, total_commitment_on};
-use epicycle_core::history::{self, ImportPlan, Side};
+use epicycle_core::history::{self, HistoryReplacement, ImportPlan, Side};
 use epicycle_core::money::{Currency, Fractional, Money};
 use epicycle_core::recurrence::{DayOfMonth, Month, Rule, Schedule};
 use epicycle_core::subscription::{Plan, Status, Subscription, SubscriptionId};
@@ -21,6 +21,8 @@ use ts_rs::TS;
 use uuid::Uuid;
 
 use crate::db::Db;
+use crate::history_view::{DeletedView, RevisionView, history_view};
+use epicycle_core::history::{History, RevisionId};
 
 /// An error to show to the user. It reaches the UI as its message.
 #[derive(Debug)]
@@ -205,17 +207,12 @@ pub struct CurrencyOption {
 pub enum ImportMode {
     /// Add what's new in the backup and keep this device's changes.
     Merge,
-    /// Make this device match the backup.
+    /// Make this device match the backup, keeping what it replaces in the
+    /// history.
     Replace,
-}
-
-impl From<ImportMode> for history::ImportMode {
-    fn from(mode: ImportMode) -> Self {
-        match mode {
-            ImportMode::Merge => history::ImportMode::Merge,
-            ImportMode::Replace => history::ImportMode::Replace,
-        }
-    }
+    /// Make this device's history exactly the backup's, permanently deleting
+    /// changes the backup doesn't have.
+    ReplaceHistory,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
@@ -244,6 +241,23 @@ pub struct ImportSummary {
     pub updated: u32,
     pub removed: u32,
     pub conflicts: Vec<ConflictView>,
+    /// Changes in this device's history that would be permanently deleted;
+    /// only replacing the history deletes any.
+    pub lost_revisions: u32,
+}
+
+fn count(n: usize) -> u32 {
+    u32::try_from(n).unwrap_or(u32::MAX)
+}
+
+pub fn replacement_summary(plan: &HistoryReplacement) -> ImportSummary {
+    ImportSummary {
+        added: count(plan.added),
+        updated: count(plan.updated),
+        removed: count(plan.removed),
+        conflicts: Vec::new(),
+        lost_revisions: count(plan.lost_revisions),
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -255,8 +269,8 @@ pub struct Imported {
 }
 
 pub fn import_summary(plan: &ImportPlan) -> ImportSummary {
-    let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
     ImportSummary {
+        lost_revisions: 0,
         added: count(plan.added()),
         updated: count(plan.updated()),
         removed: count(plan.removed()),
@@ -589,8 +603,20 @@ pub async fn preview_import(
     path: String,
     mode: ImportMode,
 ) -> Result<ImportSummary, CommandError> {
-    let plan = db.preview_import(&read_backup(&path)?, mode.into()).await?;
-    Ok(import_summary(&plan))
+    let backup = read_backup(&path)?;
+    Ok(match mode {
+        ImportMode::Merge => import_summary(
+            &db.preview_import(&backup, history::ImportMode::Merge)
+                .await?,
+        ),
+        ImportMode::Replace => import_summary(
+            &db.preview_import(&backup, history::ImportMode::Replace)
+                .await?,
+        ),
+        ImportMode::ReplaceHistory => {
+            replacement_summary(&db.preview_history_replacement(&backup).await?)
+        }
+    })
 }
 
 #[tauri::command]
@@ -599,11 +625,71 @@ pub async fn import_backup(
     path: String,
     mode: ImportMode,
 ) -> Result<Imported, CommandError> {
-    let plan = db.import(&read_backup(&path)?, mode.into()).await?;
+    let backup = read_backup(&path)?;
+    let summary = match mode {
+        ImportMode::Merge => import_summary(&db.import(&backup, history::ImportMode::Merge).await?),
+        ImportMode::Replace => {
+            import_summary(&db.import(&backup, history::ImportMode::Replace).await?)
+        }
+        ImportMode::ReplaceHistory => replacement_summary(&db.replace_history(&backup).await?),
+    };
     Ok(Imported {
-        summary: import_summary(&plan),
+        summary,
         overview: overview_of(&db.subscriptions().await?, today())?,
     })
+}
+
+fn parse_id<T>(text: &str, wrap: impl Fn(Uuid) -> T) -> Result<T, CommandError> {
+    Ok(wrap(Uuid::parse_str(text)?))
+}
+
+/// A subscription's change history, newest first. Works for deleted
+/// subscriptions too.
+#[tauri::command]
+pub async fn subscription_history(
+    db: State<'_, Db>,
+    id: String,
+) -> Result<Vec<RevisionView>, CommandError> {
+    let id = parse_id(&id, SubscriptionId)?;
+    let history = History::new(db.history(id).await?)?;
+    Ok(history_view(&history, db.device_id()))
+}
+
+/// Makes an earlier version of a subscription current again.
+#[tauri::command]
+pub async fn restore_revision(
+    db: State<'_, Db>,
+    id: String,
+    revision: String,
+) -> Result<SubscriptionDetail, CommandError> {
+    let restored = db
+        .restore(
+            parse_id(&id, SubscriptionId)?,
+            parse_id(&revision, RevisionId)?,
+        )
+        .await?;
+    detail_of(&restored, today())
+}
+
+/// Deleted subscriptions, most recently deleted first.
+#[tauri::command]
+pub async fn deleted_subscriptions(db: State<'_, Db>) -> Result<Vec<DeletedView>, CommandError> {
+    let mut views = Vec::new();
+    for (deletion, version) in db.deleted().await? {
+        let Some(s) = &version.subscription else {
+            continue;
+        };
+        let plan = s.plans().last().expect("a subscription has a plan").value;
+        views.push(DeletedView {
+            id: s.id().to_string(),
+            name: s.name().to_owned(),
+            price: Money::new(plan.amount, s.currency()).into(),
+            billing: plan.schedule.rule().into(),
+            deleted_at: deletion.created_at.to_string(),
+            revision_id: version.id.to_string(),
+        });
+    }
+    Ok(views)
 }
 
 #[cfg(test)]
@@ -867,6 +953,7 @@ mod tests {
                     kept: KeptSide::Backup,
                     kept_deleted: false,
                 }],
+                lost_revisions: 0,
             }
         );
     }

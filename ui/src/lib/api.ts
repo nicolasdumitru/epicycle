@@ -3,12 +3,14 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import type { CurrencyOption } from './bindings/CurrencyOption';
+import type { DeletedView } from './bindings/DeletedView';
 import type { Edit } from './bindings/Edit';
 import type { Imported } from './bindings/Imported';
 import type { ImportMode } from './bindings/ImportMode';
 import type { ImportSummary } from './bindings/ImportSummary';
 import type { NewSubscription } from './bindings/NewSubscription';
 import type { Overview } from './bindings/Overview';
+import type { RevisionView } from './bindings/RevisionView';
 import type { SubscriptionDetail } from './bindings/SubscriptionDetail';
 
 export const getOverview = (): Promise<Overview> => invoke('overview');
@@ -38,3 +40,13 @@ export const previewImport = (path: string, mode: ImportMode): Promise<ImportSum
 
 export const importBackup = (path: string, mode: ImportMode): Promise<Imported> =>
 	invoke('import_backup', { path, mode });
+
+/** A subscription's change history, newest first; works for deleted ones too. */
+export const getHistory = (id: string): Promise<RevisionView[]> =>
+	invoke('subscription_history', { id });
+
+/** Makes an earlier version current again, recording a new revision. */
+export const restoreRevision = (id: string, revision: string): Promise<SubscriptionDetail> =>
+	invoke('restore_revision', { id, revision });
+
+export const getDeleted = (): Promise<DeletedView[]> => invoke('deleted_subscriptions');

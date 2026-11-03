@@ -10,8 +10,8 @@ use std::str::FromStr;
 
 use epicycle_core::backup::{Backup, Settings};
 use epicycle_core::history::{
-    Cause, History, HistoryError, ImportMode, ImportPlan, NewHead, Revision, RevisionId,
-    plan_import,
+    Cause, History, HistoryError, HistoryReplacement, ImportMode, ImportPlan, NewHead, Revision,
+    RevisionId, plan_history_replacement, plan_import,
 };
 use epicycle_core::money::Currency;
 use epicycle_core::recurrence::{DayOfMonth, Month, Rule, Schedule};
@@ -292,6 +292,92 @@ impl Db {
         }
         tx.commit().await?;
         Ok(plan)
+    }
+
+    /// What [`Db::replace_history`] would do, without changing anything.
+    pub async fn preview_history_replacement(
+        &self,
+        backup: &Backup,
+    ) -> Result<HistoryReplacement, DbError> {
+        let mut conn = self.pool.acquire().await?;
+        let local = load_history(&mut conn).await?;
+        Ok(plan_history_replacement(&local, &backup.history))
+    }
+
+    /// Makes this device's history exactly the backup's, with its settings.
+    /// Revisions only on this device are permanently deleted: this is the one
+    /// operation that erases history, and the UI asks for confirmation first.
+    /// One transaction, like [`Db::import`].
+    pub async fn replace_history(&self, backup: &Backup) -> Result<HistoryReplacement, DbError> {
+        let mut tx = self.pool.begin().await?;
+        let local = load_history(&mut tx).await?;
+        let plan = plan_history_replacement(&local, &backup.history);
+
+        // Current state first, since it refers to revisions. Plans and status
+        // changes go with it (ON DELETE CASCADE). Deleting every revision in one
+        // statement never leaves a dangling parent link.
+        sqlx::query!("DELETE FROM subscriptions")
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query!("DELETE FROM revisions")
+            .execute(&mut *tx)
+            .await?;
+        // Parents first, so every parent exists when its child is inserted.
+        for revision in backup.history.revisions() {
+            insert_revision(&mut tx, revision).await?;
+        }
+        for subscription in backup.history.current() {
+            let head = backup
+                .history
+                .head(subscription.id())
+                .expect("a current subscription has a head");
+            write_current(&mut tx, subscription, head.id).await?;
+        }
+        let currency = backup.settings.reporting_currency.code();
+        sqlx::query!(
+            "UPDATE app_state SET reporting_currency = ? WHERE id = 1",
+            currency
+        )
+        .execute(&mut *tx)
+        .await?;
+        tx.commit().await?;
+        Ok(plan)
+    }
+
+    /// Subscriptions whose latest revision is a deletion, most recently
+    /// deleted first: each deletion with the revision holding the version that
+    /// was deleted.
+    pub async fn deleted(&self) -> Result<Vec<(Revision, Revision)>, DbError> {
+        let mut conn = self.pool.acquire().await?;
+        let history = load_history(&mut conn).await?;
+        let mut deleted: Vec<_> = history
+            .deleted()
+            .map(|(d, v)| (d.clone(), v.clone()))
+            .collect();
+        deleted.sort_by_key(|d| std::cmp::Reverse(d.0.created_at));
+        Ok(deleted)
+    }
+
+    /// Identifies this installation in the change history.
+    pub fn device_id(&self) -> Uuid {
+        self.device_id
+    }
+
+    /// Makes an earlier version of a subscription current again, recording a
+    /// new revision on top of its history. Works for deleted subscriptions too.
+    pub async fn restore(
+        &self,
+        id: SubscriptionId,
+        revision: RevisionId,
+    ) -> Result<Subscription, DbError> {
+        let history = History::new(self.history(id).await?)?;
+        let version = history
+            .get(revision)
+            .filter(|r| r.subscription_id == id)
+            .and_then(|r| r.subscription.clone())
+            .ok_or_else(|| corrupt(format_args!("no version {revision} of {id} to restore")))?;
+        self.save(&version).await?;
+        Ok(version)
     }
 
     /// A revision recorded now, on this device.
@@ -973,6 +1059,79 @@ mod tests {
         assert_eq!(
             settings(&mut conn).await.unwrap().reporting_currency.code(),
             "USD"
+        );
+    }
+
+    #[tokio::test]
+    async fn replacing_the_history_leaves_exactly_the_backups() {
+        let other = Db::open_in_memory().await.unwrap();
+        let theirs = named("Theirs");
+        other.save(&theirs).await.unwrap();
+        other
+            .save(&theirs.renamed("Theirs 2").unwrap())
+            .await
+            .unwrap();
+
+        let db = Db::open_in_memory().await.unwrap();
+        let mine = named("Mine");
+        db.save(&mine).await.unwrap();
+        db.save(&mine.renamed("Mine 2").unwrap()).await.unwrap();
+
+        let backup = backup_of(&other).await;
+        let preview = db.preview_history_replacement(&backup).await.unwrap();
+        assert_eq!(
+            preview,
+            HistoryReplacement {
+                added: 1,
+                updated: 0,
+                removed: 1,
+                lost_revisions: 2,
+            }
+        );
+        assert_eq!(db.history(mine.id()).await.unwrap().len(), 2);
+
+        assert_eq!(db.replace_history(&backup).await.unwrap(), preview);
+        assert_eq!(
+            db.subscriptions().await.unwrap(),
+            [theirs.renamed("Theirs 2").unwrap()]
+        );
+        // This device's own history is gone, and the backup's is all there is.
+        assert!(db.history(mine.id()).await.unwrap().is_empty());
+        let after = db.export().await.unwrap();
+        assert_eq!(after.history, backup.history);
+        // Editing afterwards continues the backup's history.
+        let edited = theirs.renamed("Theirs 3").unwrap();
+        db.save(&edited).await.unwrap();
+        assert_eq!(db.history(theirs.id()).await.unwrap().len(), 3);
+    }
+
+    #[tokio::test]
+    async fn restores_earlier_and_deleted_versions() {
+        let db = Db::open_in_memory().await.unwrap();
+        let s = named("First");
+        let first = db.save(&s).await.unwrap().unwrap();
+        db.save(&s.renamed("Second").unwrap()).await.unwrap();
+
+        let restored = db.restore(s.id(), first).await.unwrap();
+        assert_eq!(restored, s);
+        assert_eq!(db.subscriptions().await.unwrap(), std::slice::from_ref(&s));
+        // Restoring adds a revision; it doesn't rewrite the history.
+        let history = db.history(s.id()).await.unwrap();
+        assert_eq!(history.len(), 3);
+        assert_eq!(history[2].cause, Cause::Edited);
+
+        db.delete(s.id()).await.unwrap();
+        assert!(db.subscriptions().await.unwrap().is_empty());
+        let deleted = db.deleted().await.unwrap();
+        assert_eq!(deleted.len(), 1);
+        assert_eq!(deleted[0].1.subscription.as_ref(), Some(&s));
+
+        db.restore(s.id(), first).await.unwrap();
+        assert_eq!(db.subscriptions().await.unwrap(), std::slice::from_ref(&s));
+        assert!(db.deleted().await.unwrap().is_empty());
+        assert_eq!(
+            db.history(s.id()).await.unwrap().last().unwrap().cause,
+            Cause::Created
         );
     }
 

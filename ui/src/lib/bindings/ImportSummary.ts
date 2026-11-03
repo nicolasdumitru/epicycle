@@ -4,4 +4,9 @@ import type { ConflictView } from "./ConflictView";
 /**
  * What an import does (or did), in numbers of subscriptions.
  */
-export type ImportSummary = { added: number, updated: number, removed: number, conflicts: Array<ConflictView>, };
+export type ImportSummary = { added: number, updated: number, removed: number, conflicts: Array<ConflictView>, 
+/**
+ * Changes in this device's history that would be permanently deleted;
+ * only replacing the history deletes any.
+ */
+lostRevisions: number, };

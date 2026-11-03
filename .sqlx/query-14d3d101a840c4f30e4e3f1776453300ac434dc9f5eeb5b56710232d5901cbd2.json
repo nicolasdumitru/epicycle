@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM revisions",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "14d3d101a840c4f30e4e3f1776453300ac434dc9f5eeb5b56710232d5901cbd2"
+}

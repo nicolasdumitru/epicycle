@@ -1,5 +1,6 @@
 pub mod commands;
 pub mod db;
+pub mod history_view;
 
 use tauri::Manager;
 
@@ -26,6 +27,9 @@ pub fn run() {
             commands::export_backup,
             commands::preview_import,
             commands::import_backup,
+            commands::subscription_history,
+            commands::restore_revision,
+            commands::deleted_subscriptions,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Epicycle");
