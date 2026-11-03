@@ -70,6 +70,11 @@ design, DECISIONS.md has the details.
   such as HRK), searchable by code or name. Dates are typed (year first, or year
   last in the locale's order) or picked from a calendar that jumps straight to
   any month and year: WebKitGTK's `<input type="date">` doesn't accept typing.
+  Opening the currency field without typing shows the whole list in code order,
+  scrolled to the current currency.
+- **Backup exports** are named with the local date and time
+  (`epicycle-backup-2026-11-03_19-45-07.json`) and start in Downloads. Mobile
+  document pickers may ignore the starting folder; check on iOS.
 - **Replace import gets a second, destructive mode.** The current Replace (adds
   revisions, erases nothing) stays the default and its wording gets clearer. A
   separate "replace history" option makes this device's history exactly the
@@ -96,6 +101,11 @@ Agreed order for the rest of milestone 1 (2026-11-03):
 3. **History view** with restore, and the two Replace modes (see above).
 4. **Exchange rates and the converted total**. The domain logic exists
    (`crates/core/src/fx.rs`); nothing fetches or stores rates yet.
+
+Agreed, for when there is a settings screen:
+
+- **Default folder for backups**: exports start in Downloads on every platform
+  (since 2026-11-03); a setting will let the user choose another folder.
 
 Later, not yet agreed:
 

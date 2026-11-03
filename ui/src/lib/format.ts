@@ -125,3 +125,14 @@ export function describeConflict(conflict: ConflictView, done: boolean): string 
 	const what = conflict.keptDeleted ? 'deletion' : 'version';
 	return `${conflict.name}: ${verb} ${side} ${what}`;
 }
+
+/**
+ * "epicycle-backup-2026-11-03_19-45-07.json", in local time. Hyphens rather
+ * than colons, which Windows doesn't allow in file names.
+ */
+export function backupFileName(now: Date): string {
+	const p = (n: number) => String(n).padStart(2, '0');
+	const date = `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())}`;
+	const time = `${p(now.getHours())}-${p(now.getMinutes())}-${p(now.getSeconds())}`;
+	return `epicycle-backup-${date}_${time}.json`;
+}

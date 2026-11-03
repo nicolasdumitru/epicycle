@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	backupFileName,
 	daysBetween,
 	describeBilling,
 	describeConflict,
@@ -102,6 +103,14 @@ describe('describeImport', () => {
 		);
 		expect(describeConflict({ name: 'Music', kept: 'device', keptDeleted: true }, true)).toBe(
 			"Music: kept this device's deletion"
+		);
+	});
+});
+
+describe('backupFileName', () => {
+	it('includes the local date and time, padded', () => {
+		expect(backupFileName(new Date(2026, 10, 3, 9, 5, 7))).toBe(
+			'epicycle-backup-2026-11-03_09-05-07.json'
 		);
 	});
 });

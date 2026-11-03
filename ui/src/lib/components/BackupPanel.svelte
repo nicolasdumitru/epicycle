@@ -1,13 +1,13 @@
 <script lang="ts">
+	import { downloadDir, join } from '@tauri-apps/api/path';
 	import { open, save } from '@tauri-apps/plugin-dialog';
 	import { exportBackup, importBackup, previewImport } from '#lib/api.ts';
 	import type { ImportMode } from '#lib/bindings/ImportMode.ts';
 	import type { ImportSummary } from '#lib/bindings/ImportSummary.ts';
 	import type { Overview } from '#lib/bindings/Overview.ts';
-	import { describeConflict, describeImport } from '#lib/format.ts';
+	import { backupFileName, describeConflict, describeImport } from '#lib/format.ts';
 
-	let { today, onImported }: { today: string; onImported: (overview: Overview) => void } =
-		$props();
+	let { onImported }: { onImported: (overview: Overview) => void } = $props();
 
 	const filters = [{ name: 'Epicycle backup', extensions: ['json'] }];
 
@@ -41,9 +41,21 @@
 		}
 	}
 
+	// Exports start in Downloads. A setting to choose another folder will come
+	// with the settings screen.
+	async function defaultExportPath(): Promise<string> {
+		const name = backupFileName(new Date());
+		try {
+			return await join(await downloadDir(), name);
+		} catch {
+			// No Downloads folder on this platform: let the dialog choose.
+			return name;
+		}
+	}
+
 	const exportFile = () =>
 		run(async () => {
-			const path = await save({ defaultPath: `epicycle-backup-${today}.json`, filters });
+			const path = await save({ defaultPath: await defaultExportPath(), filters });
 			if (!path) return;
 			await exportBackup(path);
 			message = `Saved ${fileName(path)}.`;
