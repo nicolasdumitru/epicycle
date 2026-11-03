@@ -71,9 +71,11 @@ Newest decisions are appended at the end of each section.
   - APKs target 64-bit ARM only, which covers current phones; other targets
     can be added to the build command if needed.
   - **The emulator is a separate flake package** (`nix run .#android-emulator`,
-    an Android 16 phone image), not part of the Android shell, so CI doesn't
-    download the system image. Android Studio isn't needed: the emulator has
-    its own window and controls.
+    a Pixel 10 with Android 16), not part of the Android shell, so CI doesn't
+    download the system image. It is a small launcher of our own
+    (`nix/android_emulator.py`) rather than nixpkgs' `emulateApp`, which pins
+    command-line tools too old to know phones after the Pixel 6. Android
+    Studio isn't needed: the emulator has its own window and controls.
   - **The database is registered before start-up opens it** (`DbHandle`):
     on Android the web view can call commands while start-up is still waiting
     for the data folder from the Java side, and they used to fail with "state
