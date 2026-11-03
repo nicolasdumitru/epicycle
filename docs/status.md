@@ -109,6 +109,8 @@ Agreed order for the rest of milestone 1 (2026-11-03):
    total and in the add form, starred from the dashboard; backed up with manual
    exchange rates in backup format version 3.
 6. ~~Hourly exchange rate refresh~~ (done): in the background while the app runs.
+7. ~~Nix package~~ (done): `nix run github:nicolasdumitru/epicycle`, or in the
+   system configuration (see the README). CI builds it.
 
 Agreed, for when there is a settings screen:
 
@@ -124,8 +126,6 @@ Later, not yet agreed:
   the document picker for backups.
 - **Upcoming payments** list and the **monthly chart** (scheduled cash flow vs
   monthly-equivalent commitment, kept visibly separate).
-- **Nix package** for installing the app on NixOS (`nix run`, or in the system
-  configuration).
 
 ## Open questions
 
