@@ -16,6 +16,7 @@ pub fn run() {
             std::fs::create_dir_all(&dir)?;
             let db = tauri::async_runtime::block_on(Db::open(&dir.join("epicycle.sqlite3")))?;
             app.manage(db);
+            rates::spawn_refresher(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

@@ -678,7 +678,7 @@ pub fn manual_rate(
 }
 
 /// Today in the device's time zone.
-fn today() -> Date {
+pub fn today() -> Date {
     jiff::Zoned::now().date()
 }
 

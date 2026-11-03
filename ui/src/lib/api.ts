@@ -2,6 +2,7 @@
 // They reject with an error message.
 
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 import type { ConvertedTotal } from './bindings/ConvertedTotal';
 import type { CurrencyOption } from './bindings/CurrencyOption';
 import type { DeletedView } from './bindings/DeletedView';
@@ -73,3 +74,14 @@ export const deleteManualRate = (currency: string, date: string): Promise<RatesO
 
 export const setReportingCurrency = (currency: string): Promise<void> =>
 	invoke('set_reporting_currency', { currency });
+
+/**
+ * Calls `handler` whenever the app stores new exchange rates in the background
+ * (see crates/app/src/rates.rs). Returns a function that stops listening.
+ */
+export function onRatesUpdated(handler: () => void): () => void {
+	const stop = listen('rates-updated', handler);
+	return () => {
+		stop.then((unlisten) => unlisten());
+	};
+}

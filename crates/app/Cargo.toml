@@ -29,6 +29,8 @@ sqlx = { version = "0.9.0", default-features = false, features = ["runtime-tokio
 tauri = { version = "2.12.3", features = [] }
 tauri-plugin-dialog = "2.8.3"
 thiserror = "2.0.21"
+# Timers for refreshing exchange rates in the background; Tauri runs on tokio.
+tokio = { version = "1.54.1", features = ["time"] }
 ts-rs = "12"
 uuid = { version = "1.29.0", features = ["v7"] }
 

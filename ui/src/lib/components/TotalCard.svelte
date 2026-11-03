@@ -1,13 +1,13 @@
 <script lang="ts">
 	// The current recurring commitment converted to one currency: the default
 	// (reporting) currency, or any other chosen here. Shows which rates the
-	// total relies on and how old they are, and refreshes ECB rates in the
-	// background when online.
+	// total relies on and how old they are, and recomputes when the app stores
+	// new ECB rates in the background.
 	import { onMount } from 'svelte';
 	import {
 		getConvertedTotal,
 		getCurrencies,
-		refreshRates,
+		onRatesUpdated,
 		setReportingCurrency
 	} from '#lib/api.ts';
 	import type { ConvertedTotal } from '#lib/bindings/ConvertedTotal.ts';
@@ -34,7 +34,6 @@
 	let currency = $state('');
 	let total = $state<ConvertedTotal | null>(null);
 	let error = $state<string | null>(null);
-	let offline = $state(false);
 	let ratesVersion = $state(0);
 
 	async function load(code: string) {
@@ -60,15 +59,10 @@
 			currency = (await getConvertedTotal(null)).defaultCurrency;
 		} catch (e) {
 			error = String(e);
-			return;
-		}
-		// Opportunistic: if this fails, cached and manual rates still work.
-		try {
-			if ((await refreshRates()) > 0) ratesVersion += 1;
-		} catch {
-			offline = true;
 		}
 	});
+
+	$effect(() => onRatesUpdated(() => (ratesVersion += 1)));
 
 	async function makeDefault() {
 		if (!total) return;
@@ -121,7 +115,7 @@
 
 		{#if stale.length > 0}
 			<p class="warning">
-				Some rates are out of date{offline ? " and couldn't be updated: you seem to be offline" : ''}.
+				Some rates are out of date: the app updates them when it's online.
 				<a href="/rates">Check rates</a>
 			</p>
 		{/if}
