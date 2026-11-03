@@ -8,6 +8,7 @@
 pub mod backup;
 pub mod cashflow;
 pub mod commitment;
+pub mod ecb;
 pub mod fx;
 pub mod history;
 pub mod money;

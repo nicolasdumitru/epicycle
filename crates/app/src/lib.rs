@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod db;
 pub mod history_view;
+pub mod rates;
 
 use tauri::Manager;
 
@@ -30,6 +31,12 @@ pub fn run() {
             commands::subscription_history,
             commands::restore_revision,
             commands::deleted_subscriptions,
+            commands::converted_total,
+            commands::refresh_rates,
+            commands::exchange_rates,
+            commands::add_manual_rate,
+            commands::delete_manual_rate,
+            commands::set_reporting_currency,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Epicycle");

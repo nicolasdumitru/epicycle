@@ -5,6 +5,7 @@
 	import type { SubscriptionView } from '#lib/bindings/SubscriptionView.ts';
 	import AddSubscription from '#lib/components/AddSubscription.svelte';
 	import BackupPanel from '#lib/components/BackupPanel.svelte';
+	import TotalCard from '#lib/components/TotalCard.svelte';
 	import {
 		daysBetween,
 		describeBilling,
@@ -47,28 +48,7 @@
 	{/if}
 
 	{#if overview}
-		<section class="summary" aria-label="Recurring commitment">
-			<div class="stat">
-				<h2>Per month</h2>
-				{#each overview.monthlyTotal as total (total.currency)}
-					<p class="value">{formatMoney(total, locale)}</p>
-				{:else}
-					<p class="value">–</p>
-				{/each}
-			</div>
-			<div class="stat">
-				<h2>Per year</h2>
-				{#each overview.annualTotal as total (total.currency)}
-					<p class="value">{formatMoney(total, locale)}</p>
-				{:else}
-					<p class="value">–</p>
-				{/each}
-			</div>
-			<p class="note">
-				What active subscriptions cost at current prices, averaged per month and per year. Totals in
-				different currencies are shown separately.
-			</p>
-		</section>
+		<TotalCard monthlyByCurrency={overview.monthlyTotal} reloadKey={overview} />
 
 		{#if adding}
 			<AddSubscription
@@ -169,35 +149,10 @@
 		color: var(--danger);
 	}
 
-	.summary {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 0.75rem;
-	}
 
-	.stat {
-		background: var(--surface);
-		border: 1px solid var(--border);
-		border-radius: 0.75rem;
-		padding: 0.875rem 1rem;
-	}
 
-	.stat h2 {
-		margin-bottom: 0.25rem;
-		font-size: 0.875rem;
-	}
 
-	.value {
-		font-size: 1.5rem;
-		font-weight: 650;
-		font-variant-numeric: tabular-nums;
-	}
 
-	.note {
-		grid-column: 1 / -1;
-		color: var(--muted);
-		font-size: 0.875rem;
-	}
 
 	.add {
 		justify-self: start;

@@ -27,6 +27,17 @@
 	const matches = $derived(searching ? matchCurrencies(options, text) : options);
 	const selected = $derived(findCurrency(options, value));
 
+	// Show a currency chosen from outside, e.g. a default that loads later.
+	// Only a change of value does this, so typing isn't overwritten.
+	// svelte-ignore state_referenced_locally (compared, not tracked)
+	let lastValue = value;
+	$effect(() => {
+		if (value !== lastValue) {
+			lastValue = value;
+			if (value) text = value;
+		}
+	});
+
 	// Block form submission until a listed currency is chosen.
 	$effect(() => {
 		input?.setCustomValidity(

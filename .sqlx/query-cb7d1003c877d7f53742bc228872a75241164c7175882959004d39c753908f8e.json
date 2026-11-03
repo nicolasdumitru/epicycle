@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM exchange_rates WHERE currency = ? AND date = ? AND source = 'manual'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "cb7d1003c877d7f53742bc228872a75241164c7175882959004d39c753908f8e"
+}

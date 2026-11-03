@@ -100,11 +100,16 @@ Agreed order for the rest of milestone 1 (2026-11-03):
    resuming, cancelling and deleting.
 3. ~~History view~~ (done): on each subscription's screen, with restore; a
    screen for deleted subscriptions; the two Replace modes.
-4. **Exchange rates and the converted total**. The domain logic exists
-   (`crates/core/src/fx.rs`); nothing fetches or stores rates yet.
+4. ~~Exchange rates and the converted total~~ (done): ECB rates fetched when
+   online, manual rates on an "Exchange rates" screen, and the dashboard total in
+   any currency, with the rates it used and their age.
+
+Open: should manual exchange rates go into backups (backup format version 3)?
 
 Agreed, for when there is a settings screen:
 
+- **Default reporting currency**: for now it changes from the dashboard
+  ("Always show totals in …").
 - **Default folder for backups**: exports start in Downloads on every platform
   (since 2026-11-03); a setting will let the user choose another folder.
 
