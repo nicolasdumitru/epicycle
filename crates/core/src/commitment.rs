@@ -4,7 +4,7 @@
 //!
 //! Calendar rules convert exactly: amount `a` every `n` months is `12a / n` per
 //! year. Day and week rules have no whole number of payments per year, so they
-//! use the mean Gregorian year of 365.2425 days (see `DECISIONS.md`).
+//! use the mean Gregorian year of 365.2425 days (see `docs/DECISIONS.md`).
 
 use jiff::civil::Date;
 use rust_decimal::Decimal;

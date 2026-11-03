@@ -1,7 +1,7 @@
 //! Backup files: the whole change history and the settings, as versioned JSON.
 //!
 //! The current state isn't stored separately: it is the latest revision of each
-//! subscription. See DECISIONS.md, "Backups".
+//! subscription. See docs/DECISIONS.md, "Backups".
 
 use jiff::Timestamp;
 use serde::{Deserialize, Serialize};

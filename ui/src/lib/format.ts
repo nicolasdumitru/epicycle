@@ -51,7 +51,7 @@ function ordinal(day: number): string {
 }
 
 function dayOfMonth(day: number): string {
-	// Day 31 falls on the last day of every month (see DECISIONS.md).
+	// Day 31 falls on the last day of every month (see docs/DECISIONS.md).
 	return day === 31 ? 'the last day' : `the ${ordinal(day)}`;
 }
 

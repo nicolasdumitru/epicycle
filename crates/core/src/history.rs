@@ -4,7 +4,7 @@
 //! Importing a backup merges the backup's history into this device's. Because
 //! both sides keep their history, an import can tell an outdated copy of a
 //! subscription from a real conflict, where both sides changed it separately.
-//! See DECISIONS.md, "Backups".
+//! See docs/DECISIONS.md, "Backups".
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;

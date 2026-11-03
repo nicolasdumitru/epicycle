@@ -5,7 +5,7 @@ expenses and how they change over time, not just to store a list of
 subscriptions.
 
 This is the original specification. Decisions made since are in
-[status.md](status.md) and [DECISIONS.md](../DECISIONS.md).
+[status.md](status.md) and [DECISIONS.md](DECISIONS.md).
 
 ## Architecture
 
