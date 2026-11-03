@@ -30,11 +30,6 @@ deps:
 # Android commands run in the Android dev shell (nix develop .#android), so
 # they work from the default shell too. APKs are for 64-bit ARM phones.
 
-# Start the Android emulator (a virtual Pixel 10 with Android 16), then use
-# `just android-dev` in another terminal. Needs KVM.
-android-emulator:
-    nix run .#android-emulator
-
 # Run on a connected Android phone (USB debugging on) or a running emulator.
 android-dev:
     nix develop .#android --command cargo tauri android dev

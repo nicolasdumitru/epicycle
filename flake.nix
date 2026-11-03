@@ -131,35 +131,6 @@
         packages = {
           inherit epicycle;
           default = epicycle;
-        }
-        // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
-          # An Android phone emulator, a Pixel 10 with Android 16:
-          # `nix run .#android-emulator` (see nix/android_emulator.py). Separate
-          # from the Android shell so CI doesn't download the phone image.
-          # nixpkgs' emulateApp isn't used: it pins command-line tools too old
-          # to know recent phones. Needs KVM.
-          android-emulator =
-            let
-              sdk =
-                (androidenv.composeAndroidPackages {
-                  cmdLineToolsVersion = "22.0";
-                  includeEmulator = true;
-                  includeSystemImages = true;
-                  platformVersions = [ "36" ];
-                  systemImageTypes = [ "google_apis" ];
-                  abiVersions = [ "x86_64" ];
-                }).androidsdk;
-            in
-            pkgs.writers.writePython3Bin "epicycle-android-emulator"
-              {
-                # Long command lines read better unwrapped.
-                flakeIgnore = [ "E501" ];
-              }
-              (
-                builtins.replaceStrings [ "@sdk@" ] [ "${sdk}/libexec/android-sdk" ] (
-                  builtins.readFile ./nix/android_emulator.py
-                )
-              );
         };
 
         devShells = {
