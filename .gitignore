@@ -11,3 +11,7 @@ node_modules
 # Backups exported while testing. Test data lives in crates/*/testdata/.
 epicycle-backup-*.json
 epicycle-backup-*.json.partial
+
+# nix build output
+/result
+/result-*
