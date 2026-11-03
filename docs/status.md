@@ -135,7 +135,7 @@ Later, not yet agreed:
   proves the app compiles for iOS; then signed builds installed on the iPhone.
   That second step needs a decision: the Apple Developer Program (paid yearly;
   CI uploads to TestFlight, installs last 90 days), or a free Apple ID (apps
-  expire after 7 days and must be re-signed, e.g. with SideStore). Whether the
-  repository is public also matters: macOS minutes are free for public ones.
+  expire after 7 days and must be re-signed, e.g. with SideStore). The
+  repository is public, so GitHub's macOS runners cost nothing.
 
 - Sync through cloud drives: if wanted, when, and which providers first?
