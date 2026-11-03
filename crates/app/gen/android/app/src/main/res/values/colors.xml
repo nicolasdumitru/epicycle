@@ -7,4 +7,6 @@
     <color name="teal_700">#FF018786</color>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <!-- Matches the "bg" colour in ui/src/routes/+layout.svelte. -->
+    <color name="app_background">#F7F7F5</color>
 </resources>

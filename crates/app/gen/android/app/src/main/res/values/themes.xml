@@ -1,6 +1,8 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
     <style name="Theme.epicycle" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your theme here. -->
+        <!-- The app's background (the "bg" colour in ui/src/routes/+layout.svelte), shown behind
+             the status and gesture bars. -->
+        <item name="android:windowBackground">@color/app_background</item>
     </style>
 </resources>
