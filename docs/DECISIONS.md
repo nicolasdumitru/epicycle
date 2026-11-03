@@ -49,7 +49,8 @@ Newest decisions are appended at the end of each section.
 - iOS builds need macOS with Xcode, which isn't available yet; a remote macOS build
   machine will be used.
 - **Android (2026-11-03): a second dev shell, `nix develop .#android`**, with
-  everything in the default shell plus the Android SDK, NDK, JDK 21 and Rust's
+  everything in the default shell plus the Android SDK, NDK, JDK 25 (the current
+  LTS; the Android Gradle plugin needs 17 or newer) and Rust's
   Android targets. The default shell stays lean. Both are built from one shared
   package list so they can't drift apart.
   - The SDK is pinned in `flake.nix` and lives in the read-only Nix store, so
@@ -69,6 +70,14 @@ Newest decisions are appended at the end of each section.
     release builds or the other way round.
   - APKs target 64-bit ARM only, which covers current phones; other targets
     can be added to the build command if needed.
+  - **The emulator is a separate flake package** (`nix run .#android-emulator`,
+    an Android 16 phone image), not part of the Android shell, so CI doesn't
+    download the system image. Android Studio isn't needed: the emulator has
+    its own window and controls.
+  - **The database is registered before start-up opens it** (`DbHandle`):
+    on Android the web view can call commands while start-up is still waiting
+    for the data folder from the Java side, and they used to fail with "state
+    not managed". Commands now wait until it is open.
 
 ## Domain
 
@@ -166,8 +175,12 @@ separate:
   and tells the UI when it stored new rates (the `rates-updated` event).
   Failing (offline) is silent except that out-of-date rates are flagged.
 - **HTTP: `reqwest` with rustls** (its default TLS). It verifies certificates with
-  each platform's trust store (`rustls-platform-verifier`), which iOS and Android
-  need, and Tauri already locks the same `reqwest` version.
+  each platform's trust store (`rustls-platform-verifier`), and Tauri already
+  locks the same `reqwest` version. **Except on Android**, where the platform
+  verifier panics unless it is initialised from Java (a Gradle dependency plus
+  JNI setup): there, the app trusts Mozilla's root certificates
+  (`webpki-root-certs`, from the rustls project) instead. Their list updates
+  with the app.
 - **Rates are stored in `exchange_rates`**, keyed by currency, date and source,
   with the rate as exact decimal text. ECB rates are a cache; manual rates are the
   user's data, so they are in backups (format version 3).

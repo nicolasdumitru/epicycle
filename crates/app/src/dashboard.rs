@@ -18,7 +18,7 @@ use tauri::State;
 use ts_rs::TS;
 
 use crate::commands::{CommandError, MoneyView, currency_in_use, rounded, today};
-use crate::db::Db;
+use crate::db::DbHandle;
 
 /// One payment due soon.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -162,9 +162,10 @@ pub fn monthly_chart_of(
 /// Payments due in the next `days` days (at most a year).
 #[tauri::command]
 pub async fn upcoming_payments(
-    db: State<'_, Db>,
+    db: State<'_, DbHandle>,
     days: u16,
 ) -> Result<Vec<UpcomingPayment>, CommandError> {
+    let db = db.ready().await;
     Ok(upcoming_of(
         &db.subscriptions().await?,
         today(),
@@ -175,9 +176,10 @@ pub async fn upcoming_payments(
 /// The monthly chart in `currency`, or the reporting currency if none.
 #[tauri::command]
 pub async fn monthly_chart(
-    db: State<'_, Db>,
+    db: State<'_, DbHandle>,
     currency: Option<String>,
 ) -> Result<MonthlyChart, CommandError> {
+    let db = db.ready().await;
     let to = match currency.as_deref() {
         Some(code) => currency_in_use(code)?,
         None => db.reporting_currency().await?,

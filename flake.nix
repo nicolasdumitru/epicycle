@@ -130,6 +130,27 @@
         packages = {
           inherit epicycle;
           default = epicycle;
+        }
+        // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
+          # An Android phone emulator: `nix run .#android-emulator`. Separate
+          # from the Android shell so CI doesn't download the system image. The
+          # virtual phone is kept in ~/.local/share/epicycle-android-emulator,
+          # so its data survives restarts. Needs KVM.
+          android-emulator = (pkgs.androidenv.override { licenseAccepted = true; }).emulateApp {
+            name = "epicycle-android-emulator";
+            platformVersion = "36";
+            abiVersion = "x86_64";
+            systemImageType = "google_apis";
+            deviceName = "epicycle";
+            androidUserHome = "$HOME/.local/share/epicycle-android-emulator";
+            configOptions = {
+              # The computer's GPU and keyboard, for speed and for typing
+              # into fields as on a phone with a keyboard.
+              "hw.gpu.enabled" = "yes";
+              "hw.gpu.mode" = "auto";
+              "hw.keyboard" = "yes";
+            };
+          };
         };
 
         devShells = {
@@ -145,7 +166,7 @@
             packages = [
               androidRustToolchain
               androidSdk
-              pkgs.jdk21
+              pkgs.jdk25
             ]
             ++ commonPackages;
             buildInputs = tauriLibs;
@@ -153,7 +174,7 @@
             ANDROID_HOME = androidHome;
             ANDROID_SDK_ROOT = androidHome;
             NDK_HOME = "${androidHome}/ndk/${androidNdk}";
-            JAVA_HOME = pkgs.jdk21.home;
+            JAVA_HOME = pkgs.jdk25.home;
             # Gradle downloads its own aapt2, a generic Linux binary that can't
             # run on NixOS; use the SDK's instead.
             GRADLE_OPTS = "-Dorg.gradle.project.android.aapt2FromMavenOverride=${androidHome}/build-tools/${androidBuildTools}/aapt2";

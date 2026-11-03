@@ -15,7 +15,7 @@ use thiserror::Error;
 
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::db::{Db, DbError};
+use crate::db::{Db, DbError, DbHandle};
 
 /// How many days of rates to fetch the first time.
 const FIRST_FETCH_DAYS: i64 = 14;
@@ -48,10 +48,18 @@ pub fn fetch_since(last: Option<(Date, Timestamp)>, today: Date, now: Timestamp)
 }
 
 async fn fetch(since: Date, now: Timestamp) -> Result<Vec<Rate>, RefreshError> {
-    let client = reqwest::Client::builder()
+    let builder = reqwest::Client::builder()
         .timeout(Duration::from_secs(20))
-        .user_agent(concat!("Epicycle/", env!("CARGO_PKG_VERSION")))
-        .build()?;
+        .user_agent(concat!("Epicycle/", env!("CARGO_PKG_VERSION")));
+    // Elsewhere the platform's own trust store checks certificates; on Android
+    // that would need Java-side setup, so trust Mozilla's root list instead.
+    #[cfg(target_os = "android")]
+    let builder = builder.tls_certs_only(
+        webpki_root_certs::TLS_SERVER_ROOT_CERTS
+            .iter()
+            .filter_map(|der| reqwest::Certificate::from_der(der).ok()),
+    );
+    let client = builder.build()?;
     let response = client.get(ecb::rates_url(since)).send().await?;
     // The API answers "no results" with 404 on some versions; that just means
     // nothing new.
@@ -75,8 +83,9 @@ pub const UPDATED_EVENT: &str = "rates-updated";
 pub fn spawn_refresher(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         loop {
-            let db = app.state::<Db>();
-            if let Ok(stored) = refresh(&db, crate::commands::today()).await
+            let handle = app.state::<DbHandle>();
+            let db = handle.ready().await;
+            if let Ok(stored) = refresh(db, crate::commands::today()).await
                 && stored > 0
             {
                 // Nothing to do if no window is listening.

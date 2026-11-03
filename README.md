@@ -62,13 +62,15 @@ Android work uses a second dev shell with the Android SDK and NDK added:
 ```sh
 just android-debug     # debug APK, for this machine's own testing
 just android-release   # release APK (signed once a key is set up)
+just android-emulator  # start a virtual phone (Android 16), then:
 just android-dev       # run on a connected phone or a running emulator
 just android-keystore  # create the release signing key, once
 ```
 
 APKs end up in `crates/app/gen/android/app/build/outputs/apk/`. CI builds a
 signed release APK on every push; download it from the run's artifacts. Android
-Studio isn't needed.
+Studio isn't needed. The emulator keeps its virtual phone in
+`~/.local/share/epicycle-android-emulator`; delete that folder to start fresh.
 
 ## Layout
 
