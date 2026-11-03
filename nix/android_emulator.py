@@ -16,6 +16,11 @@ SDK = "@sdk@"
 NAME = "epicycle-pixel-10"
 DEVICE = "pixel_10"
 IMAGE = "system-images;android-36;google_apis;x86_64"
+# Vulkan passthrough to the computer's GPU can hang: Android's WebView
+# initialises Vulkan when it starts, and on some hosts the call never returns,
+# which freezes the app on a white screen ("not responding"). Without it, the
+# guest falls back to OpenGL, which still uses the GPU.
+DEFAULT_FLAGS = ["-feature", "-Vulkan"]
 # Use the computer's GPU, and let its keyboard type into the phone.
 CONFIG = {
     "hw.gpu.enabled": "yes",
@@ -57,7 +62,7 @@ def main() -> None:
                 config.write(f"{key}={value}\n")
 
     emulator = f"{SDK}/emulator/emulator"
-    os.execve(emulator, [emulator, "-avd", NAME, *sys.argv[1:]], env)
+    os.execve(emulator, [emulator, "-avd", NAME, *DEFAULT_FLAGS, *sys.argv[1:]], env)
 
 
 if __name__ == "__main__":
