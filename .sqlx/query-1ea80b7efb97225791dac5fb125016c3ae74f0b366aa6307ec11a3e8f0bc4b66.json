@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM favorite_currencies",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "1ea80b7efb97225791dac5fb125016c3ae74f0b366aa6307ec11a3e8f0bc4b66"
+}

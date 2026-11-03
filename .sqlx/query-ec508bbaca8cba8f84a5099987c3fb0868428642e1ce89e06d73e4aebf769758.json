@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM exchange_rates WHERE source = 'manual'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "ec508bbaca8cba8f84a5099987c3fb0868428642e1ce89e06d73e4aebf769758"
+}

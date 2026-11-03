@@ -104,7 +104,10 @@ Agreed order for the rest of milestone 1 (2026-11-03):
    online, manual rates on an "Exchange rates" screen, and the dashboard total in
    any currency, with the rates it used and their age.
 
-Open: should manual exchange rates go into backups (backup format version 3)?
+5. ~~Favourite currencies~~ (done, 2026-11-03): one-tap chips on the dashboard
+   total and in the add form, starred from the dashboard; backed up with manual
+   exchange rates in backup format version 3.
+6. ~~Hourly exchange rate refresh~~ (done): in the background while the app runs.
 
 Agreed, for when there is a settings screen:
 

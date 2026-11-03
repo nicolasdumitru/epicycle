@@ -86,7 +86,15 @@ describe('describeBilling', () => {
 });
 
 describe('describeImport', () => {
-	const none = { added: 0, updated: 0, removed: 0, conflicts: [], lostRevisions: 0 };
+	const none = {
+		added: 0,
+		updated: 0,
+		removed: 0,
+		conflicts: [],
+		lostRevisions: 0,
+		ratesChanged: 0,
+		ratesRemoved: 0
+	};
 
 	it('lists each kind of change, in the right tense', () => {
 		const summary = { ...none, added: 2, removed: 1 };
@@ -97,6 +105,13 @@ describe('describeImport', () => {
 	it('warns about history that would be lost', () => {
 		expect(describeImport({ ...none, lostRevisions: 3 }, false)).toEqual([
 			"Permanently deletes 3 changes in this device's history that the backup doesn't have."
+		]);
+	});
+
+	it('counts exchange rates entered by hand', () => {
+		expect(describeImport({ ...none, ratesChanged: 2, ratesRemoved: 1 }, false)).toEqual([
+			'Adds or updates 2 exchange rates you entered.',
+			'Deletes 1 exchange rate you entered on this device.'
 		]);
 	});
 

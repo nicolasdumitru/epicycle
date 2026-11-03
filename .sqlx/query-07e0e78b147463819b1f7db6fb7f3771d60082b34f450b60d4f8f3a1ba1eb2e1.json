@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO favorite_currencies (currency, position) VALUES (?, ?)\n             ON CONFLICT (currency) DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "07e0e78b147463819b1f7db6fb7f3771d60082b34f450b60d4f8f3a1ba1eb2e1"
+}

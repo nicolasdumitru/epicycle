@@ -133,6 +133,17 @@ export function describeImport(summary: ImportSummary, done: boolean): string[] 
 			`${done ? 'Permanently deleted' : 'Permanently deletes'} ${changes} in this device's history that the backup doesn't have.`
 		);
 	}
+	const rates = (n: number) => (n === 1 ? '1 exchange rate' : `${n} exchange rates`);
+	if (summary.ratesChanged > 0) {
+		lines.push(
+			`${done ? 'Added or updated' : 'Adds or updates'} ${rates(summary.ratesChanged)} you entered.`
+		);
+	}
+	if (summary.ratesRemoved > 0) {
+		lines.push(
+			`${done ? 'Deleted' : 'Deletes'} ${rates(summary.ratesRemoved)} you entered on this device.`
+		);
+	}
 	if (lines.length === 0 && summary.conflicts.length === 0) {
 		lines.push(
 			done

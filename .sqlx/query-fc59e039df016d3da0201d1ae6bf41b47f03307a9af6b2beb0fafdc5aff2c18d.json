@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT currency FROM favorite_currencies ORDER BY position",
+  "describe": {
+    "columns": [
+      {
+        "name": "currency",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "favorite_currencies",
+            "name": "currency"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "fc59e039df016d3da0201d1ae6bf41b47f03307a9af6b2beb0fafdc5aff2c18d"
+}

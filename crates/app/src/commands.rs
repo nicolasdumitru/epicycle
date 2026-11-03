@@ -9,6 +9,7 @@ use std::num::NonZeroU16;
 use std::path::Path;
 
 use epicycle_core::backup::Backup;
+use epicycle_core::backup::RateChanges;
 use epicycle_core::commitment::{commitment_on, total_commitment_on};
 use epicycle_core::history::{self, HistoryReplacement, ImportPlan, Side};
 use epicycle_core::money::{Currency, Fractional, Money};
@@ -246,6 +247,20 @@ pub struct ImportSummary {
     /// Changes in this device's history that would be permanently deleted;
     /// only replacing the history deletes any.
     pub lost_revisions: u32,
+    /// Exchange rates entered by hand that are added or changed.
+    pub rates_changed: u32,
+    /// Exchange rates entered by hand on this device that are deleted; only
+    /// replacing the history deletes any.
+    pub rates_removed: u32,
+}
+
+/// Adds what happens to manual exchange rates to an import summary.
+pub fn with_rates(summary: ImportSummary, rates: &RateChanges) -> ImportSummary {
+    ImportSummary {
+        rates_changed: count(rates.changed),
+        rates_removed: count(rates.removed),
+        ..summary
+    }
 }
 
 fn count(n: usize) -> u32 {
@@ -259,6 +274,8 @@ pub fn replacement_summary(plan: &HistoryReplacement) -> ImportSummary {
         removed: count(plan.removed),
         conflicts: Vec::new(),
         lost_revisions: count(plan.lost_revisions),
+        rates_changed: 0,
+        rates_removed: 0,
     }
 }
 
@@ -273,6 +290,8 @@ pub struct Imported {
 pub fn import_summary(plan: &ImportPlan) -> ImportSummary {
     ImportSummary {
         lost_revisions: 0,
+        rates_changed: 0,
+        rates_removed: 0,
         added: count(plan.added()),
         updated: count(plan.updated()),
         removed: count(plan.removed()),
@@ -748,6 +767,30 @@ pub async fn delete_manual_rate(
     exchange_rates(db).await
 }
 
+/// Favourite currencies, in the user's order.
+#[tauri::command]
+pub async fn favorite_currencies(db: State<'_, Db>) -> Result<Vec<String>, CommandError> {
+    Ok(db
+        .favorites()
+        .await?
+        .iter()
+        .map(|c| c.code().to_owned())
+        .collect())
+}
+
+#[tauri::command]
+pub async fn set_favorite_currencies(
+    db: State<'_, Db>,
+    currencies: Vec<String>,
+) -> Result<Vec<String>, CommandError> {
+    let favorites = currencies
+        .iter()
+        .map(|c| currency_in_use(c))
+        .collect::<Result<Vec<_>, _>>()?;
+    db.set_favorites(&favorites).await?;
+    favorite_currencies(db).await
+}
+
 #[tauri::command]
 pub async fn set_reporting_currency(
     db: State<'_, Db>,
@@ -846,18 +889,23 @@ pub async fn preview_import(
 ) -> Result<ImportSummary, CommandError> {
     let backup = read_backup(&path)?;
     Ok(match mode {
-        ImportMode::Merge => import_summary(
-            &db.preview_import(&backup, history::ImportMode::Merge)
-                .await?,
-        ),
-        ImportMode::Replace => import_summary(
-            &db.preview_import(&backup, history::ImportMode::Replace)
-                .await?,
-        ),
+        ImportMode::Merge | ImportMode::Replace => {
+            let (plan, rates) = db.preview_import(&backup, history_mode(mode)).await?;
+            with_rates(import_summary(&plan), &rates)
+        }
         ImportMode::ReplaceHistory => {
-            replacement_summary(&db.preview_history_replacement(&backup).await?)
+            let (plan, rates) = db.preview_history_replacement(&backup).await?;
+            with_rates(replacement_summary(&plan), &rates)
         }
     })
+}
+
+/// The history merge behind Merge and Replace.
+fn history_mode(mode: ImportMode) -> history::ImportMode {
+    match mode {
+        ImportMode::Merge => history::ImportMode::Merge,
+        ImportMode::Replace | ImportMode::ReplaceHistory => history::ImportMode::Replace,
+    }
 }
 
 #[tauri::command]
@@ -868,11 +916,14 @@ pub async fn import_backup(
 ) -> Result<Imported, CommandError> {
     let backup = read_backup(&path)?;
     let summary = match mode {
-        ImportMode::Merge => import_summary(&db.import(&backup, history::ImportMode::Merge).await?),
-        ImportMode::Replace => {
-            import_summary(&db.import(&backup, history::ImportMode::Replace).await?)
+        ImportMode::Merge | ImportMode::Replace => {
+            let (plan, rates) = db.import(&backup, history_mode(mode)).await?;
+            with_rates(import_summary(&plan), &rates)
         }
-        ImportMode::ReplaceHistory => replacement_summary(&db.replace_history(&backup).await?),
+        ImportMode::ReplaceHistory => {
+            let (plan, rates) = db.replace_history(&backup).await?;
+            with_rates(replacement_summary(&plan), &rates)
+        }
     };
     Ok(Imported {
         summary,
@@ -1270,7 +1321,7 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(
-            import_summary(&plan),
+            import_summary(&plan.0),
             ImportSummary {
                 added: 1,
                 updated: 0,
@@ -1281,6 +1332,8 @@ mod tests {
                     kept_deleted: false,
                 }],
                 lost_revisions: 0,
+                rates_changed: 0,
+                rates_removed: 0,
             }
         );
     }
