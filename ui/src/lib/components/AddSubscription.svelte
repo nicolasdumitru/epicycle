@@ -111,7 +111,7 @@
 	<DateInput
 		bind:value={nextPayment}
 		label="Next payment"
-		hint="Monthly and yearly billing repeat on this day."
+		hint="Nothing is due before it, e.g. during a free trial. Monthly and yearly billing repeat on this day."
 		required
 		{today}
 	/>

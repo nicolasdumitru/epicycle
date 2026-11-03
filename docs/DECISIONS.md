@@ -95,6 +95,15 @@ separate:
   subscription.
 - Every period is half-open, `[from, to)`, so consecutive periods never count a
   payment twice.
+- **A free period is a plan with amount 0** (2026-11-03): a free trial, or time
+  already paid for. A plan with amount 0 has no payments, so the next payment is
+  the next real one. Both forms create one when the first payment they're given
+  is not simply the next one on the schedule: from the change's date (or today,
+  for a new subscription) until that payment. It shows in the history like any
+  price change. During it, the monthly commitment is 0: the subscription costs
+  nothing yet, and its upcoming price is shown next to it. Needed no format
+  change. This fixed a bug where a next payment months away still counted the
+  monthly payments before it.
 - **Notes are part of the subscription**, plain text for now. Editing them records
   a revision like any other change, and they travel in backups and merge with the
   rest of the subscription. Line endings are normalised and trailing whitespace

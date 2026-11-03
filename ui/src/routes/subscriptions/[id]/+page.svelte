@@ -13,6 +13,8 @@
 	import {
 		billingUnits,
 		describeBilling,
+		describePrice,
+		isFree,
 		formatDate,
 		formatMoney,
 		statusChoiceLabels
@@ -148,7 +150,7 @@
 		<header>
 			<h1>{sub.name}</h1>
 			<p class="muted">
-				{formatMoney(sub.price, locale)} · {describeBilling(sub.billing, sub.nextPayment, locale)}
+				{describePrice(sub, locale)}
 			</p>
 			<p class="muted">
 				{#if sub.nextPayment}
@@ -196,7 +198,9 @@
 						<li>
 							<span class="when">From {formatDate(plan.from, locale)}</span>
 							<span>
-								{formatMoney(plan.price, locale)} · {describeBilling(plan.billing, plan.anchor, locale)}
+								{isFree(plan.price)
+									? 'Free: no payments'
+									: `${formatMoney(plan.price, locale)} · ${describeBilling(plan.billing, plan.anchor, locale)}`}
 							</span>
 						</li>
 					{/each}
@@ -238,7 +242,7 @@
 						<DateInput
 							bind:value={planForm.nextPayment}
 							label="First payment at the new price"
-							hint="Monthly and yearly billing repeat on this day."
+							hint="Nothing is paid before it. Monthly and yearly billing repeat on this day."
 							required
 							today={detail.today}
 						/>

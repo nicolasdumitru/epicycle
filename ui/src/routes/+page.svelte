@@ -9,6 +9,7 @@
 	import {
 		daysBetween,
 		describeBilling,
+		describePrice,
 		formatDate,
 		formatMoney,
 		isMonthly,
@@ -75,7 +76,7 @@
 								<div class="main">
 									<h3>{s.name}</h3>
 									<p class="muted">
-										{formatMoney(s.price, locale)} · {describeBilling(s.billing, s.nextPayment, locale)}
+										{describePrice(s, locale)}
 									</p>
 									{#if s.monthly && !isMonthly(s.billing)}
 										<p class="muted">≈ {formatMoney(s.monthly, locale)} per month</p>

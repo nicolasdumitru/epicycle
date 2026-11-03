@@ -67,6 +67,8 @@ pub enum SubscriptionError {
     BeforeStart(Date, Date),
     #[error("changes must be in date order with at most one per day (problem at {0})")]
     Unordered(Date),
+    #[error("a free period must end after it starts ({0} to {1})")]
+    EmptyFreePeriod(Date, Date),
 }
 
 /// A subscription and its full history.
@@ -236,6 +238,27 @@ impl Subscription {
         self.rebuilt(self.name.clone(), plans, self.status_changes.clone())
     }
 
+    /// The subscription with nothing to pay in `[from, until)`, such as a free
+    /// trial or time already paid for: the plan in effect on `from` continues
+    /// with amount 0, then at its own amount again from `until`. Recorded as
+    /// plans, so the free period shows in the history like any price change.
+    ///
+    /// Unchanged if no payment falls in the period anyway, so a next payment
+    /// that is simply the next one on the schedule adds nothing.
+    pub fn with_free_period(&self, from: Date, until: Date) -> Result<Self, SubscriptionError> {
+        if until <= from {
+            return Err(SubscriptionError::EmptyFreePeriod(from, until));
+        }
+        if self.payments_between(from, until).next().is_none() {
+            return Ok(self.clone());
+        }
+        let plan = *self
+            .plan_on(from)
+            .ok_or(SubscriptionError::BeforeStart(from, self.start()))?;
+        self.with_plan(from, Plan { amount: 0, ..plan })?
+            .with_plan(until, plan)
+    }
+
     /// The subscription with its status changing to `status` on `from`. Like
     /// [`Subscription::with_plan`], this replaces a change on the same date.
     pub fn with_status(&self, from: Date, status: Status) -> Result<Self, SubscriptionError> {
@@ -266,7 +289,8 @@ impl Subscription {
         )
     }
 
-    /// Every payment due in `[from, to)`, in date order.
+    /// Every payment due in `[from, to)`, in date order. Plans with amount 0
+    /// have none.
     ///
     /// These come from the subscription's recorded plans and statuses, not from
     /// bank data: payments in the past are estimates of what was paid.
@@ -283,6 +307,9 @@ impl Subscription {
                     .dates_between(lo, hi)
                     .map(move |date| (date, plan.value.amount))
             })
+            // Nothing is paid under a plan with amount 0 (a free period), so
+            // it has no payments, and the next payment is the next real one.
+            .filter(|&(_, amount)| amount != 0)
             .filter(move |&(date, _)| self.status_on(date) == Some(Status::Active))
             .map(move |(date, amount)| Payment {
                 subscription: self.id,
@@ -400,6 +427,35 @@ pub(crate) mod tests {
         let json = serde_json::to_string(&with).unwrap();
         assert!(json.contains(r#""notes":"Shared""#), "{json}");
         assert_eq!(serde_json::from_str::<Subscription>(&json).unwrap(), with);
+    }
+
+    #[test]
+    fn a_free_period_skips_payments_then_bills_as_before() {
+        let s = subscription(date(2026, 1, 12), monthly_plan(date(2026, 1, 12), 2000))
+            .with_free_period(date(2026, 11, 3), date(2027, 3, 12))
+            .unwrap();
+        assert_eq!(
+            payment_dates(&s, date(2026, 10, 1), date(2027, 5, 1)),
+            [
+                (date(2026, 10, 12), 2000),
+                (date(2027, 3, 12), 2000),
+                (date(2027, 4, 12), 2000)
+            ]
+        );
+        assert_eq!(s.plan_on(date(2026, 12, 1)).unwrap().amount, 0);
+    }
+
+    #[test]
+    fn a_free_period_without_payments_in_it_changes_nothing() {
+        let s = subscription(date(2026, 1, 12), monthly_plan(date(2026, 1, 12), 2000));
+        let same = s
+            .with_free_period(date(2026, 11, 3), date(2026, 11, 12))
+            .unwrap();
+        assert_eq!(same, s);
+        assert!(
+            s.with_free_period(date(2026, 11, 3), date(2026, 11, 3))
+                .is_err()
+        );
     }
 
     #[test]
