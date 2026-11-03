@@ -116,8 +116,9 @@ separate:
   without a CSV library). The first fetch takes two weeks; later ones start the
   day after the newest cached rate, never after today (the API rejects future
   start dates), and not again within an hour of a fetch that brought new rates.
-  The dashboard asks for a refresh when it opens; failing (offline) is silent
-  except that out-of-date rates are flagged.
+  A background task checks at start-up and then every hour while the app runs,
+  and tells the UI when it stored new rates (the `rates-updated` event).
+  Failing (offline) is silent except that out-of-date rates are flagged.
 - **HTTP: `reqwest` with rustls** (its default TLS). It verifies certificates with
   each platform's trust store (`rustls-platform-verifier`), which iOS and Android
   need, and Tauri already locks the same `reqwest` version.

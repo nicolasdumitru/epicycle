@@ -7,6 +7,7 @@
 		deleteManualRate,
 		getCurrencies,
 		getRates,
+		onRatesUpdated,
 		refreshRates
 	} from '#lib/api.ts';
 	import type { CurrencyOption } from '#lib/bindings/CurrencyOption.ts';
@@ -40,6 +41,13 @@
 			error = String(e);
 		}
 	});
+
+	// New rates fetched in the background while this screen is open.
+	$effect(() =>
+		onRatesUpdated(async () => {
+			rates = await getRates();
+		})
+	);
 
 	async function run(action: () => Promise<void>) {
 		busy = true;
@@ -82,8 +90,9 @@
 	</nav>
 	<h1>Exchange rates</h1>
 	<p class="muted">
-		Totals in one currency use the European Central Bank's daily reference rates, updated when the
-		app is open and online. For a currency the ECB doesn't publish, or to use your own rate, enter
+		Totals in one currency use the European Central Bank's daily reference rates. While the app is
+		open and online, it checks for new ones every hour; the ECB publishes them on working days
+		around 16:00 CET. For a currency the ECB doesn't publish, or to use your own rate, enter
 		one below: it takes precedence over the ECB's for the same day.
 	</p>
 

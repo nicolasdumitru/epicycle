@@ -13,6 +13,8 @@ use jiff::civil::Date;
 use jiff::{SignedDuration, Timestamp, ToSpan};
 use thiserror::Error;
 
+use tauri::{AppHandle, Emitter, Manager};
+
 use crate::db::{Db, DbError};
 
 /// How many days of rates to fetch the first time.
@@ -58,6 +60,31 @@ async fn fetch(since: Date, now: Timestamp) -> Result<Vec<Rate>, RefreshError> {
     }
     let body = response.error_for_status()?.text().await?;
     Ok(ecb::parse_rates(&body, now)?)
+}
+
+/// How often the background task checks whether new rates are due. Most
+/// checks make no request: see [`fetch_since`].
+const CHECK_EVERY: Duration = Duration::from_secs(60 * 60);
+
+/// Sent to the UI whenever new rates were stored, so totals can be redone.
+pub const UPDATED_EVENT: &str = "rates-updated";
+
+/// Keeps rates current while the app runs: checks at start-up and then every
+/// [`CHECK_EVERY`]. Failures (usually being offline) are retried at the next
+/// check; cached and manual rates keep working meanwhile.
+pub fn spawn_refresher(app: AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        loop {
+            let db = app.state::<Db>();
+            if let Ok(stored) = refresh(&db, crate::commands::today()).await
+                && stored > 0
+            {
+                // Nothing to do if no window is listening.
+                let _ = app.emit(UPDATED_EVENT, stored);
+            }
+            tokio::time::sleep(CHECK_EVERY).await;
+        }
+    });
 }
 
 /// Fetches new ECB rates if the cache is out of date. Returns how many rates
