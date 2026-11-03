@@ -54,9 +54,16 @@
 		new Intl.DateTimeFormat(locale, { month: 'long' }).format(new Date(2024, i, 1))
 	);
 
-	// Keep the field in step when the value changes from outside, e.g. a reset.
+	// The value this field last reported or was given. Only a different value
+	// counts as a change from outside (e.g. a form reset) and replaces the
+	// text, so a half-typed date is never overwritten while typing.
+	// svelte-ignore state_referenced_locally (compared, not tracked)
+	let lastValue = value;
 	$effect(() => {
-		if (value !== (parsed ?? '')) text = value;
+		if (value !== lastValue) {
+			lastValue = value;
+			text = value;
+		}
 	});
 
 	$effect(() => {
@@ -65,8 +72,11 @@
 		);
 	});
 
-	function oninput() {
-		value = parsed ?? '';
+	function oninput(event: Event) {
+		// Read the field itself: the binding to `text` may not have run yet.
+		const typed = (event.currentTarget as HTMLInputElement).value;
+		text = typed;
+		value = lastValue = typed.trim() === '' ? '' : (parseTypedDate(typed, locale) ?? '');
 	}
 
 	function onblur() {
@@ -83,7 +93,7 @@
 	}
 
 	function pick(day: number) {
-		value = toIso(view.year, view.month, day);
+		value = lastValue = toIso(view.year, view.month, day);
 		text = value;
 		open = false;
 		input?.focus();
