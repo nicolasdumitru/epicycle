@@ -26,6 +26,15 @@ Newest decisions are appended at the end of each section.
 - **App identifier: `io.github.nicolasdumitru.epicycle`.** It determines the data
   directory on every platform and the iOS bundle ID, so it must not change.
 
+## Packaging
+
+- **NixOS: a flake package** (`nix/package.nix`, 2026-11-03), built like the
+  Tauri apps in nixpkgs: `rustPlatform.buildRustPackage` with the `cargo-tauri`
+  hook, and the frontend's pnpm dependencies fetched by `fetchPnpmDeps` (a
+  fixed-output hash to update when `ui/pnpm-lock.yaml` changes). The source is
+  limited to what the build reads, so documentation changes don't rebuild it.
+  Tests aren't rerun in the package build; CI runs them.
+
 ## Platforms
 
 - Validation order: **NixOS desktop, then iOS**, then iPadOS, Windows, macOS, Android.

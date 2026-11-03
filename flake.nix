@@ -53,8 +53,16 @@
           pango
           webkitgtk_4_1
         ];
+        epicycle = pkgs.callPackage ./nix/package.nix { };
       in
       {
+        # `nix run`, `nix build`, or `inputs.epicycle.packages.<system>.default`
+        # in a NixOS configuration.
+        packages = {
+          inherit epicycle;
+          default = epicycle;
+        };
+
         devShells.default = pkgs.mkShell {
           packages = [
             rustToolchain

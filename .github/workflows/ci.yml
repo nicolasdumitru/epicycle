@@ -30,3 +30,13 @@ jobs:
       # `cargo test` regenerates the TypeScript bindings; they must be committed.
       - name: TypeScript bindings are up to date
         run: git diff --exit-code -- ui/src/lib/bindings
+
+  # The Nix package, as installed on NixOS. Also catches a frontend lockfile
+  # change without the matching hash in nix/package.nix.
+  nix-package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
+      - name: Build the package
+        run: nix build .#default --print-build-logs
