@@ -3,7 +3,7 @@
 Where the project stands, what has been decided since the
 [specification](spec.md), and what comes next. Keep it current: update it at the
 end of each piece of work. Design decisions and their reasons are in
-[DECISIONS.md](../DECISIONS.md).
+[DECISIONS.md](DECISIONS.md).
 
 Last updated: 2026-11-03.
 
@@ -58,6 +58,10 @@ design, DECISIONS.md has the details.
 - **`just` runs everything**: `just`, `just dev`, `just test`, `just check`.
 - **Project context lives in the repository** (this file and spec.md), because
   conversations with coding agents don't move between devices.
+- **DECISIONS.md moved to `docs/`**, next to spec.md and this file. Comments in
+  the first two migrations still say "DECISIONS.md" without the folder: editing
+  an applied migration changes its checksum, and sqlx then refuses to open
+  existing databases.
 
 ## Next steps
 

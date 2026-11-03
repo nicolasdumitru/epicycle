@@ -1,14 +1,14 @@
 Manage Rust dependencies with Cargo and use a Nix flake for all of the other dependencies.
 Use Conventional Commits and an Angular-inspired convention.
 
-Before starting work, read docs/spec.md (what the app is), docs/status.md (progress, decisions since the spec, next steps) and DECISIONS.md. Update docs/status.md at the end of each piece of work.
+Before starting work, read docs/spec.md (what the app is), docs/status.md (progress, decisions since the spec, next steps) and docs/DECISIONS.md. Update docs/status.md at the end of each piece of work.
 
 ## Working
 
 - Ask before making decisions that are expensive to reverse (stack, storage format, backup schema).
 - When unsure whether something belongs in the MVP, assume it doesn't and ask.
 - Work in small, reviewable increments; keep commits focused.
-- Explain non-obvious design choices briefly in code comments or DECISIONS.md.
+- Explain non-obvious design choices briefly in code comments or docs/DECISIONS.md.
 
 ## Code
 

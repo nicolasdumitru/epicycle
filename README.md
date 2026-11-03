@@ -32,4 +32,4 @@ just sqlx-prepare
 - `crates/core/` — pure domain logic: money, recurrence, subscriptions, commitment, cash flow, exchange rates
 - `ui/` — SvelteKit frontend (single-page app, no server rendering)
 
-Design decisions are recorded in [DECISIONS.md](DECISIONS.md).
+Design decisions are recorded in [docs/DECISIONS.md](docs/DECISIONS.md).
