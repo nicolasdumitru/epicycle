@@ -18,6 +18,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             commands::overview,
+            commands::currencies,
             commands::add_subscription,
             commands::delete_subscription,
             commands::export_backup,

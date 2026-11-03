@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 use std::fmt;
 use std::str::FromStr;
 
+use iso_currency::IntoEnumIterator;
 use rust_decimal::{Decimal, RoundingStrategy};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -41,6 +42,29 @@ impl Currency {
     pub fn exponent(self) -> u32 {
         // Checked in `from_str`.
         self.0.exponent().map_or(0, u32::from)
+    }
+
+    /// The English name, e.g. `"Romanian leu"`.
+    pub fn name(&self) -> &str {
+        self.0.name()
+    }
+
+    /// True for currencies in use for payments today. Funds (such as CHE) and
+    /// currencies replaced by another (such as HRK) are not. They still parse,
+    /// so existing data that uses them stays valid, but new subscriptions can't
+    /// use them.
+    pub fn in_use(self) -> bool {
+        !self.0.is_fund() && !self.0.is_special() && self.0.is_superseded().is_none()
+    }
+
+    /// The currencies to offer for new subscriptions, sorted by code.
+    pub fn selectable() -> Vec<Currency> {
+        let mut all: Vec<Currency> = iso_currency::Currency::iter()
+            .filter_map(|c| c.code().parse().ok())
+            .filter(|c: &Currency| c.in_use())
+            .collect();
+        all.sort_by_key(|c| c.code());
+        all
     }
 }
 
@@ -284,6 +308,23 @@ mod tests {
 
     fn currency(code: &str) -> Currency {
         code.parse().unwrap()
+    }
+
+    #[test]
+    fn offers_currencies_in_use_sorted_by_code() {
+        let codes: Vec<&str> = Currency::selectable()
+            .into_iter()
+            .map(Currency::code)
+            .collect();
+        for code in ["EUR", "USD", "RON", "JPY", "KWD", "CHF"] {
+            assert!(codes.contains(&code), "{code} missing");
+        }
+        // Funds, replaced currencies and codes without minor units.
+        for code in ["CHE", "HRK", "XAU", "XTS"] {
+            assert!(!codes.contains(&code), "{code} offered");
+        }
+        assert!(codes.windows(2).all(|w| w[0] < w[1]));
+        assert_eq!(currency("RON").name(), "Romanian leu");
     }
 
     #[test]

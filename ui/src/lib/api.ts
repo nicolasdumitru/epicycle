@@ -2,6 +2,7 @@
 // They reject with an error message.
 
 import { invoke } from '@tauri-apps/api/core';
+import type { CurrencyOption } from './bindings/CurrencyOption';
 import type { Imported } from './bindings/Imported';
 import type { ImportMode } from './bindings/ImportMode';
 import type { ImportSummary } from './bindings/ImportSummary';
@@ -9,6 +10,11 @@ import type { NewSubscription } from './bindings/NewSubscription';
 import type { Overview } from './bindings/Overview';
 
 export const getOverview = (): Promise<Overview> => invoke('overview');
+
+/** Currencies offered for new subscriptions; the list never changes, so it is fetched once. */
+let currencyList: Promise<CurrencyOption[]> | undefined;
+export const getCurrencies = (): Promise<CurrencyOption[]> =>
+	(currencyList ??= invoke<CurrencyOption[]>('currencies'));
 
 export const addSubscription = (form: NewSubscription): Promise<Overview> =>
 	invoke('add_subscription', { form });

@@ -155,6 +155,16 @@ pub struct NewSubscription {
     pub since: Option<String>,
 }
 
+/// A currency the user can choose for a new subscription.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
+pub struct CurrencyOption {
+    /// ISO 4217 code, e.g. `"RON"`.
+    pub code: String,
+    /// English name, e.g. `"Romanian leu"`.
+    pub name: String,
+}
+
 /// How to import a backup.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
@@ -250,6 +260,11 @@ fn parse_date(text: &str, field: &str) -> Result<Date, CommandError> {
 /// Builds a subscription from the form, validating every field.
 pub fn new_subscription(form: &NewSubscription, today: Date) -> Result<Subscription, CommandError> {
     let currency: Currency = form.currency.trim().to_uppercase().parse()?;
+    if !currency.in_use() {
+        return Err(CommandError(format!(
+            "{currency} is no longer used for payments; choose another currency"
+        )));
+    }
     let amount = Money::parse_major(&form.amount, currency)?;
     let next = parse_date(&form.next_payment, "Next payment")?;
     let every = NonZeroU16::new(form.every)
@@ -333,6 +348,18 @@ fn today() -> Date {
 #[tauri::command]
 pub async fn overview(db: State<'_, Db>) -> Result<Overview, CommandError> {
     overview_of(&db.subscriptions().await?, today())
+}
+
+/// The currencies offered for new subscriptions, sorted by code.
+#[tauri::command]
+pub fn currencies() -> Vec<CurrencyOption> {
+    Currency::selectable()
+        .into_iter()
+        .map(|c| CurrencyOption {
+            code: c.code().to_owned(),
+            name: c.name().to_owned(),
+        })
+        .collect()
 }
 
 #[tauri::command]
@@ -487,6 +514,9 @@ mod tests {
         let mut f = form("9", 1, Unit::Months, "2026-10-31");
         f.currency = "XYZ".into();
         assert!(error(f).contains("unknown currency"));
+        let mut f = form("9", 1, Unit::Months, "2026-10-31");
+        f.currency = "HRK".into();
+        assert!(error(f).contains("no longer used"));
         let mut f = form("9", 1, Unit::Months, "2026-10-31");
         f.name = " ".into();
         assert!(error(f).contains("name"));
