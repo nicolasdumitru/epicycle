@@ -54,6 +54,75 @@
           webkitgtk_4_1
         ];
         epicycle = pkgs.callPackage ./nix/package.nix { };
+
+        # Everything for desktop work. The Android shell adds to this, so the two
+        # never drift apart.
+        commonPackages = with pkgs; [
+          # Tauri
+          cargo-tauri
+          pkg-config
+          gobject-introspection
+
+          # Frontend
+          nodejs
+          pnpm
+
+          # Database migrations and offline query metadata for sqlx
+          sqlx-cli
+
+          # Scripts and the task runner (see justfile)
+          python3
+          just
+
+          # Nix
+          nil
+          nixd
+          nixfmt
+          nixfmt-tree
+        ];
+
+        commonShellHook = ''
+          # Lets the webview find TLS support (needed for HTTPS requests).
+          export GIO_MODULE_DIR="${pkgs.glib-networking}/lib/gio/modules/"
+          # GTK's file chooser (used by the dialog plugin) aborts without its
+          # GSettings schemas. Nix packages get these from wrapGAppsHook; the
+          # dev shell has to point at them itself.
+          export XDG_DATA_DIRS="${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}''${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
+        '';
+
+        # Android: the SDK pieces Tauri's Android project needs, pinned so
+        # builds don't change under us. The app compiles against SDK 37 with
+        # build-tools 37 (see crates/app/gen/android/app/build.gradle.kts);
+        # Tauri's own Android library and plugins still want SDK 36 and
+        # build-tools 36, so both are included. Gradle can't download missing
+        # pieces: the SDK lives in the read-only Nix store.
+        androidBuildTools = "37.0.0";
+        androidNdk = "29.0.14206865";
+        androidComposition = (pkgs.androidenv.override { licenseAccepted = true; }).composeAndroidPackages {
+          platformVersions = [
+            "36"
+            "37"
+          ];
+          buildToolsVersions = [
+            "36.0.0"
+            androidBuildTools
+          ];
+          includeNDK = true;
+          ndkVersions = [ androidNdk ];
+          cmdLineToolsVersion = "22.0";
+        };
+        androidSdk = androidComposition.androidsdk;
+        androidHome = "${androidSdk}/libexec/android-sdk";
+
+        # The desktop toolchain plus Rust's Android targets.
+        androidRustToolchain = rustToolchain.override {
+          targets = [
+            "aarch64-linux-android"
+            "armv7-linux-androideabi"
+            "i686-linux-android"
+            "x86_64-linux-android"
+          ];
+        };
       in
       {
         # `nix run`, `nix build`, or `inputs.epicycle.packages.<system>.default`
@@ -63,44 +132,34 @@
           default = epicycle;
         };
 
-        devShells.default = pkgs.mkShell {
-          packages = [
-            rustToolchain
-          ]
-          ++ (with pkgs; [
-            # Tauri
-            cargo-tauri
-            pkg-config
-            gobject-introspection
+        devShells = {
+          # Desktop work: `nix develop` (or direnv).
+          default = pkgs.mkShell {
+            packages = [ rustToolchain ] ++ commonPackages;
+            buildInputs = tauriLibs;
+            shellHook = commonShellHook;
+          };
 
-            # Frontend
-            nodejs
-            pnpm
+          # Everything in the default shell, plus Android: `nix develop .#android`.
+          android = pkgs.mkShell {
+            packages = [
+              androidRustToolchain
+              androidSdk
+              pkgs.jdk21
+            ]
+            ++ commonPackages;
+            buildInputs = tauriLibs;
 
-            # Database migrations and offline query metadata for sqlx
-            sqlx-cli
+            ANDROID_HOME = androidHome;
+            ANDROID_SDK_ROOT = androidHome;
+            NDK_HOME = "${androidHome}/ndk/${androidNdk}";
+            JAVA_HOME = pkgs.jdk21.home;
+            # Gradle downloads its own aapt2, a generic Linux binary that can't
+            # run on NixOS; use the SDK's instead.
+            GRADLE_OPTS = "-Dorg.gradle.project.android.aapt2FromMavenOverride=${androidHome}/build-tools/${androidBuildTools}/aapt2";
 
-            # Scripts and the task runner (see justfile)
-            python3
-            just
-
-            # Nix
-            nil
-            nixd
-            nixfmt
-            nixfmt-tree
-          ]);
-
-          buildInputs = tauriLibs;
-
-          shellHook = ''
-            # Lets the webview find TLS support (needed for HTTPS requests).
-            export GIO_MODULE_DIR="${pkgs.glib-networking}/lib/gio/modules/"
-            # GTK's file chooser (used by the dialog plugin) aborts without its
-            # GSettings schemas. Nix packages get these from wrapGAppsHook; the
-            # dev shell has to point at them itself.
-            export XDG_DATA_DIRS="${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}''${XDG_DATA_DIRS:+:$XDG_DATA_DIRS}"
-          '';
+            shellHook = commonShellHook;
+          };
         };
       }
     );
