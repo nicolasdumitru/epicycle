@@ -7,3 +7,7 @@
 node_modules
 /ui/.svelte-kit
 /ui/build
+
+# Backups exported while testing. Test data lives in crates/*/testdata/.
+epicycle-backup-*.json
+epicycle-backup-*.json.partial
