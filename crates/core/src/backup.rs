@@ -17,7 +17,12 @@ pub const FORMAT: &str = "epicycle-backup";
 
 /// The format version this code writes. Increase it on any change to the
 /// format, and keep reading every older version.
-pub const VERSION: u64 = 1;
+///
+/// - 1: the first format.
+/// - 2: subscriptions may have `notes`. Otherwise the same as 1, so version 1
+///   files are read as version 2 files without notes. The version went up so
+///   that older apps refuse these files instead of dropping the notes.
+pub const VERSION: u64 = 2;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
@@ -70,7 +75,7 @@ struct FileRef<'a> {
 }
 
 #[derive(Deserialize)]
-struct FileV1 {
+struct File {
     exported_at: Timestamp,
     device_id: Uuid,
     settings: Settings,
@@ -102,8 +107,8 @@ impl Backup {
         if header.format != FORMAT {
             return Err(BackupError::NotABackup);
         }
-        let file: FileV1 = match header.version {
-            1 => serde_json::from_str(json).map_err(BackupError::Invalid)?,
+        let file: File = match header.version {
+            1 | 2 => serde_json::from_str(json).map_err(BackupError::Invalid)?,
             v if v > VERSION => return Err(BackupError::Newer(v)),
             v => return Err(BackupError::Unsupported(v)),
         };
@@ -123,9 +128,11 @@ mod tests {
     use crate::subscription::tests::{monthly_plan, subscription};
     use jiff::civil::date;
 
-    /// A version 1 backup, kept unchanged so that changes to the format are
-    /// noticed: it must keep importing, and exporting it must give it back.
+    /// Backups in each format version, kept unchanged so that changes to the
+    /// format are noticed: they must keep importing, and exporting the latest
+    /// must give it back.
     const V1: &str = include_str!("../testdata/backup-v1.json");
+    const V2: &str = include_str!("../testdata/backup-v2.json");
 
     fn sample() -> Backup {
         let mut b = Builder::new();
@@ -150,13 +157,30 @@ mod tests {
     }
 
     #[test]
-    fn version_1_format_is_stable() {
-        let backup = Backup::from_json(V1).unwrap();
+    fn version_2_format_is_stable() {
+        let backup = Backup::from_json(V2).unwrap();
         assert_eq!(backup.history.revisions().len(), 7);
         assert_eq!(backup.history.current().count(), 2);
+        assert!(
+            backup
+                .history
+                .current()
+                .any(|s| s.notes().starts_with("Family plan"))
+        );
         let written: serde_json::Value = serde_json::from_str(&backup.to_json()).unwrap();
-        let original: serde_json::Value = serde_json::from_str(V1).unwrap();
+        let original: serde_json::Value = serde_json::from_str(V2).unwrap();
         assert_eq!(written, original);
+    }
+
+    #[test]
+    fn version_1_imports_without_notes() {
+        let backup = Backup::from_json(V1).unwrap();
+        assert!(backup.history.current().all(|s| s.notes().is_empty()));
+        // Exported again, it is the same history in the current version.
+        let mut expected: serde_json::Value = serde_json::from_str(V1).unwrap();
+        expected["version"] = VERSION.into();
+        let written: serde_json::Value = serde_json::from_str(&backup.to_json()).unwrap();
+        assert_eq!(written, expected);
     }
 
     fn error(json: &str) -> BackupError {
@@ -179,8 +203,8 @@ mod tests {
             BackupError::NotABackup
         ));
         assert!(matches!(
-            error(&with("version", 2.into())),
-            BackupError::Newer(2)
+            error(&with("version", 3.into())),
+            BackupError::Newer(3)
         ));
         assert!(matches!(
             error(&with("version", 0.into())),

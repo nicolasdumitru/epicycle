@@ -85,6 +85,10 @@ pub struct Subscription {
     /// Status changes, strictly increasing by date and none before the start.
     /// Before the first change the subscription is active.
     status_changes: Vec<Dated<Status>>,
+    /// Free-form plain text; may be empty. Left out of the JSON when empty, so
+    /// snapshots written before notes existed read and compare unchanged.
+    #[serde(skip_serializing_if = "String::is_empty")]
+    notes: String,
 }
 
 /// The serialized form of a [`Subscription`], validated on deserialization.
@@ -95,6 +99,8 @@ struct UncheckedSubscription {
     currency: Currency,
     plans: Vec<Dated<Plan>>,
     status_changes: Vec<Dated<Status>>,
+    #[serde(default)]
+    notes: String,
 }
 
 impl TryFrom<UncheckedSubscription> for Subscription {
@@ -108,6 +114,7 @@ impl TryFrom<UncheckedSubscription> for Subscription {
             raw.plans,
             raw.status_changes,
         )
+        .map(|s| s.with_notes(&raw.notes))
     }
 }
 
@@ -159,6 +166,7 @@ impl Subscription {
             currency,
             plans,
             status_changes,
+            notes: String::new(),
         })
     }
 
@@ -186,12 +194,35 @@ impl Subscription {
         &self.status_changes
     }
 
+    pub fn notes(&self) -> &str {
+        &self.notes
+    }
+
+    /// The same subscription with new notes. Line endings become `\n` and
+    /// trailing whitespace is dropped, so the same text always compares equal.
+    pub fn with_notes(&self, notes: &str) -> Self {
+        Subscription {
+            notes: notes.replace("\r\n", "\n").trim_end().to_owned(),
+            ..self.clone()
+        }
+    }
+
+    /// This subscription with new parts, rechecked, keeping its ID, currency
+    /// and notes.
+    fn rebuilt(
+        &self,
+        name: String,
+        plans: Vec<Dated<Plan>>,
+        status_changes: Vec<Dated<Status>>,
+    ) -> Result<Self, SubscriptionError> {
+        Subscription::from_parts(self.id, name, self.currency, plans, status_changes)
+            .map(|s| s.with_notes(&self.notes))
+    }
+
     /// The same subscription under a new name.
     pub fn renamed(&self, name: &str) -> Result<Self, SubscriptionError> {
-        Subscription::from_parts(
-            self.id,
+        self.rebuilt(
             name.to_owned(),
-            self.currency,
             self.plans.clone(),
             self.status_changes.clone(),
         )
@@ -202,13 +233,7 @@ impl Subscription {
     /// covers both recording a price change and correcting one.
     pub fn with_plan(&self, from: Date, plan: Plan) -> Result<Self, SubscriptionError> {
         let plans = insert_dated(&self.plans, Dated { from, value: plan });
-        Subscription::from_parts(
-            self.id,
-            self.name.clone(),
-            self.currency,
-            plans,
-            self.status_changes.clone(),
-        )
+        self.rebuilt(self.name.clone(), plans, self.status_changes.clone())
     }
 
     /// The subscription with its status changing to `status` on `from`. Like
@@ -221,13 +246,7 @@ impl Subscription {
                 value: status,
             },
         );
-        Subscription::from_parts(
-            self.id,
-            self.name.clone(),
-            self.currency,
-            self.plans.clone(),
-            changes,
-        )
+        self.rebuilt(self.name.clone(), self.plans.clone(), changes)
     }
 
     /// The plan in effect on `date`, or `None` before the subscription started.
@@ -352,6 +371,35 @@ pub(crate) mod tests {
         s.payments_between(from, to)
             .map(|p| (p.date, p.amount.minor))
             .collect()
+    }
+
+    #[test]
+    fn notes_survive_other_edits_and_are_normalised() {
+        let s = subscription(date(2026, 1, 15), monthly_plan(date(2026, 1, 15), 1000))
+            .with_notes("Family plan\r\nShared with Ana  \n\n");
+        assert_eq!(s.notes(), "Family plan\nShared with Ana");
+        let edited = s
+            .renamed("Music")
+            .unwrap()
+            .with_plan(date(2026, 3, 1), monthly_plan(date(2026, 1, 15), 1200))
+            .unwrap()
+            .with_status(date(2026, 4, 1), Status::Paused)
+            .unwrap();
+        assert_eq!(edited.notes(), s.notes());
+    }
+
+    #[test]
+    fn empty_notes_are_left_out_of_the_json() {
+        let s = subscription(date(2026, 1, 15), monthly_plan(date(2026, 1, 15), 1000));
+        let json = serde_json::to_string(&s).unwrap();
+        assert!(!json.contains("notes"), "{json}");
+        let back: Subscription = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, s);
+
+        let with = s.with_notes("Shared");
+        let json = serde_json::to_string(&with).unwrap();
+        assert!(json.contains(r#""notes":"Shared""#), "{json}");
+        assert_eq!(serde_json::from_str::<Subscription>(&json).unwrap(), with);
     }
 
     #[test]

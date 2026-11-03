@@ -95,6 +95,10 @@ separate:
   subscription.
 - Every period is half-open, `[from, to)`, so consecutive periods never count a
   payment twice.
+- **Notes are part of the subscription**, plain text for now. Editing them records
+  a revision like any other change, and they travel in backups and merge with the
+  rest of the subscription. Line endings are normalised and trailing whitespace
+  dropped, so the same text always compares equal.
 
 ### Exchange rates
 - **Rates are stored the way the ECB publishes them:** units of a currency per
@@ -148,8 +152,12 @@ automatically.
 - **Format**: `{"format": "epicycle-backup", "version": 1, "exported_at",
   "device_id", "settings", "revisions": [...]}`. Revisions are written parents
   first. Amounts are integer minor units, dates ISO 8601, timestamps RFC 3339.
-  `crates/core/testdata/backup-v1.json` is a sample, and a test checks that it
-  still imports and exports unchanged.
+  `crates/core/testdata/` has a sample of each version; tests check that every
+  one still imports, and that the latest exports unchanged.
+- **Version 2** (2026-11-03) adds `notes` to subscriptions, left out when empty.
+  Version 1 files are read as version 2 files without notes. The version went up
+  even though nothing else changed, so that older apps refuse these files rather
+  than silently dropping the notes.
 - **Versioning**: `version` covers the whole file and goes up on any change to
   the format. The app reads every older version and refuses newer ones with a
   message to update the app.
@@ -199,6 +207,10 @@ automatically.
   columns rather than a separate parents table, since there are never more than
   two.
 - **Saving a subscription that didn't change records no revision.**
+- **Snapshot version 2** adds notes, left out of the JSON when empty, so
+  version 1 snapshots read unchanged and need no upgrade. Leaving empty notes out
+  also keeps old and new snapshots of the same subscription byte-identical, which
+  the "no change, no revision" check relies on.
 - **Builds use the committed query metadata in `.sqlx/` and need no database.**
   After changing a query or a migration, run `just sqlx-prepare`
   and commit the result. CI runs it with `--check`.

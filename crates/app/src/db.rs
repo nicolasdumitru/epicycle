@@ -26,7 +26,11 @@ use uuid::Uuid;
 /// Version of the JSON format of revision snapshots, i.e. of the serialized
 /// [`Subscription`]. Bump it, and upgrade old snapshots when reading them,
 /// whenever that format changes.
-const SNAPSHOT_VERSION: i64 = 1;
+///
+/// - 1: the first format.
+/// - 2: adds `notes`, left out when empty. Version 1 snapshots read as version
+///   2 snapshots without notes, so they need no upgrade.
+const SNAPSHOT_VERSION: i64 = 2;
 
 #[derive(Debug, Error)]
 pub enum DbError {
@@ -102,7 +106,7 @@ impl Db {
     /// All current subscriptions, ordered by name.
     pub async fn subscriptions(&self) -> Result<Vec<Subscription>, DbError> {
         let rows = sqlx::query!(
-            "SELECT id, name, currency FROM subscriptions ORDER BY name COLLATE NOCASE, id"
+            "SELECT id, name, currency, notes FROM subscriptions ORDER BY name COLLATE NOCASE, id"
         )
         .fetch_all(&self.pool)
         .await?;
@@ -151,6 +155,7 @@ impl Db {
                     plans.remove(&row.id).unwrap_or_default(),
                     statuses.remove(&row.id).unwrap_or_default(),
                 )
+                .map(|s| s.with_notes(&row.notes))
                 .map_err(corrupt)
             })
             .collect()
@@ -327,7 +332,7 @@ impl TryFrom<RevisionRow> for Revision {
     type Error = DbError;
 
     fn try_from(row: RevisionRow) -> Result<Self, Self::Error> {
-        if row.snapshot_version != SNAPSHOT_VERSION {
+        if !(1..=SNAPSHOT_VERSION).contains(&row.snapshot_version) {
             return Err(corrupt(format_args!(
                 "unsupported snapshot version {}",
                 row.snapshot_version
@@ -424,15 +429,19 @@ async fn write_current(
     let head = head.0.to_string();
     let currency = subscription.currency().code();
     let name = subscription.name();
+    let notes = subscription.notes();
     sqlx::query!(
-        "INSERT INTO subscriptions (id, name, currency, head_revision_id) VALUES (?, ?, ?, ?)
+        "INSERT INTO subscriptions (id, name, currency, notes, head_revision_id)
+         VALUES (?, ?, ?, ?, ?)
          ON CONFLICT (id) DO UPDATE SET
              name = excluded.name,
              currency = excluded.currency,
+             notes = excluded.notes,
              head_revision_id = excluded.head_revision_id",
         id,
         name,
         currency,
+        notes,
         head
     )
     .execute(&mut *conn)
@@ -654,9 +663,30 @@ mod tests {
             .with_status(date(2026, 3, 1), Status::Paused)
             .unwrap()
             .with_status(date(2026, 4, 1), Status::Active)
-            .unwrap();
+            .unwrap()
+            .with_notes("Shared with the family.\nCancel before the price rise.");
         db.save(&s).await.unwrap();
-        assert_eq!(db.subscriptions().await.unwrap(), [s]);
+        assert_eq!(db.subscriptions().await.unwrap(), [s.clone()]);
+        let history = db.history(s.id()).await.unwrap();
+        assert_eq!(history.last().unwrap().subscription.as_ref(), Some(&s));
+    }
+
+    #[tokio::test]
+    async fn reads_version_1_snapshots() {
+        let db = Db::open_in_memory().await.unwrap();
+        let s = netflix();
+        let revision = db.save(&s).await.unwrap().unwrap().0.to_string();
+        // Revisions saved before notes existed have snapshot version 1. Without
+        // notes, the JSON is the same.
+        sqlx::query("UPDATE revisions SET snapshot_version = 1 WHERE id = ?")
+            .bind(&revision)
+            .execute(&db.pool)
+            .await
+            .unwrap();
+        let history = db.history(s.id()).await.unwrap();
+        assert_eq!(history[0].subscription.as_ref(), Some(&s));
+        // And saving it unchanged still records nothing.
+        assert_eq!(db.save(&s).await.unwrap(), None);
     }
 
     #[tokio::test]
