@@ -666,7 +666,7 @@ mod tests {
             .unwrap()
             .with_notes("Shared with the family.\nCancel before the price rise.");
         db.save(&s).await.unwrap();
-        assert_eq!(db.subscriptions().await.unwrap(), [s.clone()]);
+        assert_eq!(db.subscriptions().await.unwrap(), std::slice::from_ref(&s));
         let history = db.history(s.id()).await.unwrap();
         assert_eq!(history.last().unwrap().subscription.as_ref(), Some(&s));
     }

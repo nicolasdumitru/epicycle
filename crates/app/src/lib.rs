@@ -20,6 +20,8 @@ pub fn run() {
             commands::overview,
             commands::currencies,
             commands::add_subscription,
+            commands::subscription,
+            commands::edit_subscription,
             commands::delete_subscription,
             commands::export_backup,
             commands::preview_import,

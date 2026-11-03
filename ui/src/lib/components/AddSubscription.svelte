@@ -4,6 +4,7 @@
 	import type { CurrencyOption } from '#lib/bindings/CurrencyOption.ts';
 	import type { Overview } from '#lib/bindings/Overview.ts';
 	import type { Unit } from '#lib/bindings/Unit.ts';
+	import { billingUnits as units } from '#lib/format.ts';
 	import CurrencyInput from './CurrencyInput.svelte';
 	import DateInput from './DateInput.svelte';
 
@@ -12,13 +13,6 @@
 		onAdded,
 		onCancel
 	}: { today: string; onAdded: (overview: Overview) => void; onCancel: () => void } = $props();
-
-	const units: { value: Unit; one: string; many: string }[] = [
-		{ value: 'days', one: 'day', many: 'days' },
-		{ value: 'weeks', one: 'week', many: 'weeks' },
-		{ value: 'months', one: 'month', many: 'months' },
-		{ value: 'years', one: 'year', many: 'years' }
-	];
 
 	let name = $state('');
 	let amount = $state('');

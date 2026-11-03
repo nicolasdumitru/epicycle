@@ -16,4 +16,4 @@ monthly: MoneyView | null, annual: MoneyView | null,
 /**
  * ISO date of the next payment, if one is still due.
  */
-nextPayment: string | null, start: string, };
+nextPayment: string | null, start: string, notes: string, };

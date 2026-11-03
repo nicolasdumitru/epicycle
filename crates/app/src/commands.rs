@@ -122,6 +122,39 @@ pub struct SubscriptionView {
     /// ISO date of the next payment, if one is still due.
     pub next_payment: Option<String>,
     pub start: String,
+    pub notes: String,
+}
+
+/// A plan in a subscription's history.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanView {
+    /// ISO date it takes effect.
+    pub from: String,
+    pub price: MoneyView,
+    pub billing: Billing,
+    /// ISO date of one payment, which fixes the schedule's phase.
+    pub anchor: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct StatusChangeView {
+    pub from: String,
+    pub status: StatusChoice,
+}
+
+/// Everything the subscription screen shows.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct SubscriptionDetail {
+    pub today: String,
+    pub subscription: SubscriptionView,
+    /// Oldest first.
+    pub plans: Vec<PlanView>,
+    /// Oldest first. Before the first change the subscription is active.
+    pub status_changes: Vec<StatusChangeView>,
 }
 
 /// Everything the main screen shows.
@@ -265,12 +298,35 @@ pub fn new_subscription(form: &NewSubscription, today: Date) -> Result<Subscript
             "{currency} is no longer used for payments; choose another currency"
         )));
     }
-    let amount = Money::parse_major(&form.amount, currency)?;
     let next = parse_date(&form.next_payment, "Next payment")?;
-    let every = NonZeroU16::new(form.every)
+    let plan = plan_of(&form.amount, currency, form.every, form.unit, next)?;
+    let start = match form.since.as_deref().map(str::trim) {
+        Some(since) if !since.is_empty() => parse_date(since, "Start date")?,
+        _ => today.min(next),
+    };
+    Ok(Subscription::new(
+        SubscriptionId::generate(),
+        &form.name,
+        currency,
+        start,
+        plan,
+    )?)
+}
+
+/// A plan billing `amount` (as typed) every `every` units, with a payment on
+/// `next`. Monthly and yearly billing repeat on `next`'s day.
+fn plan_of(
+    amount: &str,
+    currency: Currency,
+    every: u16,
+    unit: Unit,
+    next: Date,
+) -> Result<Plan, CommandError> {
+    let amount = Money::parse_major(amount, currency)?;
+    let every = NonZeroU16::new(every)
         .ok_or_else(|| CommandError("Billing interval must be at least 1".into()))?;
     let day = DayOfMonth::new(next.day() as u8)?;
-    let rule = match form.unit {
+    let rule = match unit {
         Unit::Days => Rule::Days { every },
         Unit::Weeks => Rule::Weeks { every },
         Unit::Months => Rule::Months { every, day },
@@ -280,21 +336,92 @@ pub fn new_subscription(form: &NewSubscription, today: Date) -> Result<Subscript
             day,
         },
     };
-    let start = match form.since.as_deref().map(str::trim) {
-        Some(since) if !since.is_empty() => parse_date(since, "Start date")?,
-        _ => today.min(next),
-    };
-    let plan = Plan {
+    Ok(Plan {
         schedule: Schedule::new(rule, next)?,
         amount: amount.minor,
-    };
-    Ok(Subscription::new(
-        SubscriptionId::generate(),
-        &form.name,
-        currency,
-        start,
-        plan,
-    )?)
+    })
+}
+
+/// A status the user can set.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum StatusChoice {
+    Active,
+    Paused,
+    Cancelled,
+}
+
+impl From<StatusChoice> for Status {
+    fn from(choice: StatusChoice) -> Self {
+        match choice {
+            StatusChoice::Active => Status::Active,
+            StatusChoice::Paused => Status::Paused,
+            StatusChoice::Cancelled => Status::Cancelled,
+        }
+    }
+}
+
+impl From<Status> for StatusChoice {
+    fn from(status: Status) -> Self {
+        match status {
+            Status::Active => StatusChoice::Active,
+            Status::Paused => StatusChoice::Paused,
+            Status::Cancelled => StatusChoice::Cancelled,
+        }
+    }
+}
+
+/// One change to an existing subscription.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
+#[ts(export)]
+pub enum Edit {
+    /// Name and notes, which have no effective date.
+    Details { name: String, notes: String },
+    /// A new price or billing schedule from a date on. A plan on the same date
+    /// as an existing one replaces it, which is how mistakes are corrected.
+    Plan {
+        from: String,
+        amount: String,
+        every: u16,
+        unit: Unit,
+        /// The first payment under the new plan; monthly and yearly billing
+        /// repeat on its day.
+        next_payment: String,
+    },
+    /// Pause, cancel or resume from a date on.
+    Status { from: String, status: StatusChoice },
+}
+
+/// Applies an edit, validating it. The result is a new value; nothing is saved.
+pub fn apply_edit(s: &Subscription, edit: &Edit) -> Result<Subscription, CommandError> {
+    match edit {
+        Edit::Details { name, notes } => Ok(s.renamed(name)?.with_notes(notes)),
+        Edit::Plan {
+            from,
+            amount,
+            every,
+            unit,
+            next_payment,
+        } => {
+            let from = parse_date(from, "Effective date")?;
+            let next = parse_date(next_payment, "First payment")?;
+            if next < from {
+                return Err(CommandError(
+                    "The first payment can't be before the change takes effect".into(),
+                ));
+            }
+            Ok(s.with_plan(from, plan_of(amount, s.currency(), *every, *unit, next)?)?)
+        }
+        Edit::Status { from, status } => {
+            let from = parse_date(from, "Effective date")?;
+            Ok(s.with_status(from, (*status).into())?)
+        }
+    }
 }
 
 fn subscription_view(s: &Subscription, today: Date) -> Result<SubscriptionView, CommandError> {
@@ -316,6 +443,32 @@ fn subscription_view(s: &Subscription, today: Date) -> Result<SubscriptionView, 
         annual: commitment.map(|c| rounded(c.annual)).transpose()?,
         next_payment: s.next_payment(today).map(|p| p.date.to_string()),
         start: s.start().to_string(),
+        notes: s.notes().to_owned(),
+    })
+}
+
+pub fn detail_of(s: &Subscription, today: Date) -> Result<SubscriptionDetail, CommandError> {
+    Ok(SubscriptionDetail {
+        today: today.to_string(),
+        subscription: subscription_view(s, today)?,
+        plans: s
+            .plans()
+            .iter()
+            .map(|p| PlanView {
+                from: p.from.to_string(),
+                price: Money::new(p.value.amount, s.currency()).into(),
+                billing: p.value.schedule.rule().into(),
+                anchor: p.value.schedule.anchor().to_string(),
+            })
+            .collect(),
+        status_changes: s
+            .status_changes()
+            .iter()
+            .map(|c| StatusChangeView {
+                from: c.from.to_string(),
+                status: c.value.into(),
+            })
+            .collect(),
     })
 }
 
@@ -370,6 +523,34 @@ pub async fn add_subscription(
     let today = today();
     db.save(&new_subscription(&form, today)?).await?;
     overview_of(&db.subscriptions().await?, today)
+}
+
+async fn find(db: &Db, id: &str) -> Result<Subscription, CommandError> {
+    let id = SubscriptionId(Uuid::parse_str(id)?);
+    db.subscriptions()
+        .await?
+        .into_iter()
+        .find(|s| s.id() == id)
+        .ok_or_else(|| CommandError("This subscription no longer exists".into()))
+}
+
+#[tauri::command]
+pub async fn subscription(
+    db: State<'_, Db>,
+    id: String,
+) -> Result<SubscriptionDetail, CommandError> {
+    detail_of(&find(&db, &id).await?, today())
+}
+
+#[tauri::command]
+pub async fn edit_subscription(
+    db: State<'_, Db>,
+    id: String,
+    edit: Edit,
+) -> Result<SubscriptionDetail, CommandError> {
+    let edited = apply_edit(&find(&db, &id).await?, &edit)?;
+    db.save(&edited).await?;
+    detail_of(&edited, today())
 }
 
 #[tauri::command]
@@ -501,6 +682,111 @@ mod tests {
         assert_eq!(view.status, StatusView::NotStarted);
         assert_eq!(view.monthly, None);
         assert_eq!(view.next_payment.as_deref(), Some("2026-12-01"));
+    }
+
+    fn music() -> Subscription {
+        new_subscription(
+            &form("10", 1, Unit::Months, "2026-10-15"),
+            date(2026, 10, 1),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn edits_name_and_notes() {
+        let s = apply_edit(
+            &music(),
+            &Edit::Details {
+                name: " Music Family ".into(),
+                notes: "Shared with Ana\n".into(),
+            },
+        )
+        .unwrap();
+        assert_eq!(s.name(), "Music Family");
+        assert_eq!(s.notes(), "Shared with Ana");
+        let blank = Edit::Details {
+            name: "".into(),
+            notes: "".into(),
+        };
+        assert!(apply_edit(&s, &blank).unwrap_err().0.contains("name"));
+    }
+
+    #[test]
+    fn a_price_change_applies_from_its_date() {
+        let edit = Edit::Plan {
+            from: "2026-12-01".into(),
+            amount: "12.50".into(),
+            every: 1,
+            unit: Unit::Months,
+            next_payment: "2026-12-15".into(),
+        };
+        let s = apply_edit(&music(), &edit).unwrap();
+        let detail = detail_of(&s, date(2026, 12, 20)).unwrap();
+        assert_eq!(detail.plans.len(), 2);
+        assert_eq!(detail.plans[1].from, "2026-12-01");
+        assert_eq!(detail.subscription.price.amount, "12.50");
+        // Before the change, the old price still applies.
+        let before = detail_of(&s, date(2026, 11, 20)).unwrap();
+        assert_eq!(before.subscription.price.amount, "10.00");
+    }
+
+    #[test]
+    fn a_new_plan_cannot_pay_before_it_starts() {
+        let edit = Edit::Plan {
+            from: "2026-12-01".into(),
+            amount: "12".into(),
+            every: 1,
+            unit: Unit::Months,
+            next_payment: "2026-11-30".into(),
+        };
+        assert!(
+            apply_edit(&music(), &edit)
+                .unwrap_err()
+                .0
+                .contains("can't be before")
+        );
+    }
+
+    #[test]
+    fn pausing_and_resuming() {
+        let paused = apply_edit(
+            &music(),
+            &Edit::Status {
+                from: "2026-11-01".into(),
+                status: StatusChoice::Paused,
+            },
+        )
+        .unwrap();
+        let view = subscription_view(&paused, date(2026, 11, 20)).unwrap();
+        assert_eq!(view.status, StatusView::Paused);
+        assert_eq!(view.next_payment, None);
+
+        let resumed = apply_edit(
+            &paused,
+            &Edit::Status {
+                from: "2027-01-01".into(),
+                status: StatusChoice::Active,
+            },
+        )
+        .unwrap();
+        let view = subscription_view(&resumed, date(2026, 11, 20)).unwrap();
+        assert_eq!(view.next_payment.as_deref(), Some("2027-01-15"));
+        assert_eq!(
+            detail_of(&resumed, date(2026, 11, 20))
+                .unwrap()
+                .status_changes
+                .len(),
+            2
+        );
+    }
+
+    #[test]
+    fn a_status_change_before_the_start_is_rejected() {
+        let edit = Edit::Status {
+            from: "2020-01-01".into(),
+            status: StatusChoice::Cancelled,
+        };
+        assert!(apply_edit(&music(), &edit).is_err());
     }
 
     #[test]

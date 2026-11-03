@@ -5,8 +5,24 @@ import type { Billing } from './bindings/Billing';
 import type { ConflictView } from './bindings/ConflictView';
 import type { ImportSummary } from './bindings/ImportSummary';
 import type { MoneyView } from './bindings/MoneyView';
+import type { StatusChoice } from './bindings/StatusChoice';
+import type { Unit } from './bindings/Unit';
 
 type Locale = string | undefined;
+
+/** Billing units with their singular and plural names, for "every n …" pickers. */
+export const billingUnits: { value: Unit; one: string; many: string }[] = [
+	{ value: 'days', one: 'day', many: 'days' },
+	{ value: 'weeks', one: 'week', many: 'weeks' },
+	{ value: 'months', one: 'month', many: 'months' },
+	{ value: 'years', one: 'year', many: 'years' }
+];
+
+export const statusChoiceLabels: Record<StatusChoice, string> = {
+	active: 'Active',
+	paused: 'Paused',
+	cancelled: 'Cancelled'
+};
 
 /** "€12.99", using the currency's own number of decimals. */
 export function formatMoney(money: MoneyView, locale: Locale): string {
