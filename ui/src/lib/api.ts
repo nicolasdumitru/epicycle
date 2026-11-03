@@ -1,7 +1,10 @@
 // Typed wrappers around the Tauri commands in crates/app/src/commands.rs.
-// Each one resolves to the refreshed overview, or rejects with an error message.
+// They reject with an error message.
 
 import { invoke } from '@tauri-apps/api/core';
+import type { Imported } from './bindings/Imported';
+import type { ImportMode } from './bindings/ImportMode';
+import type { ImportSummary } from './bindings/ImportSummary';
 import type { NewSubscription } from './bindings/NewSubscription';
 import type { Overview } from './bindings/Overview';
 
@@ -12,3 +15,12 @@ export const addSubscription = (form: NewSubscription): Promise<Overview> =>
 
 export const deleteSubscription = (id: string): Promise<Overview> =>
 	invoke('delete_subscription', { id });
+
+export const exportBackup = (path: string): Promise<void> => invoke('export_backup', { path });
+
+/** What importing the backup at `path` would do, without changing anything. */
+export const previewImport = (path: string, mode: ImportMode): Promise<ImportSummary> =>
+	invoke('preview_import', { path, mode });
+
+export const importBackup = (path: string, mode: ImportMode): Promise<Imported> =>
+	invoke('import_backup', { path, mode });

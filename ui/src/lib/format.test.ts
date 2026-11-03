@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
 	daysBetween,
 	describeBilling,
+	describeConflict,
+	describeImport,
 	formatDate,
 	formatMoney,
 	isMonthly,
@@ -76,5 +78,30 @@ describe('describeBilling', () => {
 		expect(isMonthly({ unit: 'months', every: 1, day: 1 })).toBe(true);
 		expect(isMonthly({ unit: 'months', every: 3, day: 1 })).toBe(false);
 		expect(isMonthly({ unit: 'weeks', every: 1 })).toBe(false);
+	});
+});
+
+describe('describeImport', () => {
+	const none = { added: 0, updated: 0, removed: 0, conflicts: [] };
+
+	it('lists each kind of change, in the right tense', () => {
+		const summary = { ...none, added: 2, removed: 1 };
+		expect(describeImport(summary, false)).toEqual(['Adds 2 subscriptions.', 'Removes 1 subscription.']);
+		expect(describeImport(summary, true)).toEqual(['Added 2 subscriptions.', 'Removed 1 subscription.']);
+	});
+
+	it('says when there is nothing to do', () => {
+		expect(describeImport(none, false)).toEqual([
+			'Nothing to change: this device already has everything in the backup.'
+		]);
+	});
+
+	it('names the side kept in a conflict', () => {
+		expect(describeConflict({ name: 'Music', kept: 'backup', keptDeleted: false }, false)).toBe(
+			"Music: keeps the backup's version"
+		);
+		expect(describeConflict({ name: 'Music', kept: 'device', keptDeleted: true }, true)).toBe(
+			"Music: kept this device's deletion"
+		);
 	});
 });

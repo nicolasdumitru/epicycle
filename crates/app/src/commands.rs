@@ -6,8 +6,11 @@
 //! whenever `cargo test` runs.
 
 use std::num::NonZeroU16;
+use std::path::Path;
 
+use epicycle_core::backup::Backup;
 use epicycle_core::commitment::{commitment_on, total_commitment_on};
+use epicycle_core::history::{self, ImportPlan, Side};
 use epicycle_core::money::{Currency, Fractional, Money};
 use epicycle_core::recurrence::{DayOfMonth, Month, Rule, Schedule};
 use epicycle_core::subscription::{Plan, Status, Subscription, SubscriptionId};
@@ -152,6 +155,93 @@ pub struct NewSubscription {
     pub since: Option<String>,
 }
 
+/// How to import a backup.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum ImportMode {
+    /// Add what's new in the backup and keep this device's changes.
+    Merge,
+    /// Make this device match the backup.
+    Replace,
+}
+
+impl From<ImportMode> for history::ImportMode {
+    fn from(mode: ImportMode) -> Self {
+        match mode {
+            ImportMode::Merge => history::ImportMode::Merge,
+            ImportMode::Replace => history::ImportMode::Replace,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum KeptSide {
+    Device,
+    Backup,
+}
+
+/// A subscription that both this device and the backup changed separately.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct ConflictView {
+    pub name: String,
+    pub kept: KeptSide,
+    /// The kept version is a deletion.
+    pub kept_deleted: bool,
+}
+
+/// What an import does (or did), in numbers of subscriptions.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct ImportSummary {
+    pub added: u32,
+    pub updated: u32,
+    pub removed: u32,
+    pub conflicts: Vec<ConflictView>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct Imported {
+    pub summary: ImportSummary,
+    pub overview: Overview,
+}
+
+pub fn import_summary(plan: &ImportPlan) -> ImportSummary {
+    let count = |n: usize| u32::try_from(n).unwrap_or(u32::MAX);
+    ImportSummary {
+        added: count(plan.added()),
+        updated: count(plan.updated()),
+        removed: count(plan.removed()),
+        conflicts: plan
+            .conflicts()
+            .map(|c| {
+                let (kept, other) = match c.kept {
+                    Side::Local => (&c.local, &c.incoming),
+                    Side::Incoming => (&c.incoming, &c.local),
+                };
+                ConflictView {
+                    // A conflict has at least one side that isn't a deletion.
+                    name: kept
+                        .as_ref()
+                        .or(other.as_ref())
+                        .map(|s| s.name().to_owned())
+                        .unwrap_or_default(),
+                    kept: match c.kept {
+                        Side::Local => KeptSide::Device,
+                        Side::Incoming => KeptSide::Backup,
+                    },
+                    kept_deleted: kept.is_none(),
+                }
+            })
+            .collect(),
+    }
+}
+
 fn parse_date(text: &str, field: &str) -> Result<Date, CommandError> {
     text.parse()
         .map_err(|_| CommandError(format!("{field} must be a date like 2026-01-31")))
@@ -260,6 +350,52 @@ pub async fn delete_subscription(db: State<'_, Db>, id: String) -> Result<Overvi
     let id = SubscriptionId(Uuid::parse_str(&id)?);
     db.delete(id).await?;
     overview_of(&db.subscriptions().await?, today())
+}
+
+#[tauri::command]
+pub async fn export_backup(db: State<'_, Db>, path: String) -> Result<(), CommandError> {
+    let json = db.export().await?.to_json();
+    write_replacing(Path::new(&path), json.as_bytes())
+        .map_err(|e| CommandError(format!("Couldn't save the backup: {e}")))
+}
+
+/// Writes a temporary file next to `path` and then renames it, so a failed
+/// write never leaves a half-written file in place of an older backup.
+fn write_replacing(path: &Path, contents: &[u8]) -> std::io::Result<()> {
+    let mut partial = path.as_os_str().to_owned();
+    partial.push(".partial");
+    std::fs::write(&partial, contents)?;
+    std::fs::rename(&partial, path)
+}
+
+fn read_backup(path: &str) -> Result<Backup, CommandError> {
+    let json = std::fs::read_to_string(path)
+        .map_err(|e| CommandError(format!("Couldn't read the file: {e}")))?;
+    Ok(Backup::from_json(&json)?)
+}
+
+/// What importing the backup at `path` would do, without changing anything.
+#[tauri::command]
+pub async fn preview_import(
+    db: State<'_, Db>,
+    path: String,
+    mode: ImportMode,
+) -> Result<ImportSummary, CommandError> {
+    let plan = db.preview_import(&read_backup(&path)?, mode.into()).await?;
+    Ok(import_summary(&plan))
+}
+
+#[tauri::command]
+pub async fn import_backup(
+    db: State<'_, Db>,
+    path: String,
+    mode: ImportMode,
+) -> Result<Imported, CommandError> {
+    let plan = db.import(&read_backup(&path)?, mode.into()).await?;
+    Ok(Imported {
+        summary: import_summary(&plan),
+        overview: overview_of(&db.subscriptions().await?, today())?,
+    })
 }
 
 #[cfg(test)]
@@ -382,5 +518,52 @@ mod tests {
         );
         assert_eq!(overview.annual_total[0].amount, "240.00");
         assert_eq!(overview.today, "2026-10-27");
+    }
+
+    #[tokio::test]
+    async fn import_summary_names_conflicts_and_the_kept_side() {
+        let today = date(2026, 10, 27);
+        let laptop = Db::open_in_memory().await.unwrap();
+        let phone = Db::open_in_memory().await.unwrap();
+        let s = new_subscription(&form("10", 1, Unit::Months, "2026-11-01"), today).unwrap();
+        laptop.save(&s).await.unwrap();
+        let shared = laptop.export().await.unwrap();
+        phone
+            .import(&shared, history::ImportMode::Merge)
+            .await
+            .unwrap();
+        // The laptop deletes it, then the phone renames it.
+        laptop.delete(s.id()).await.unwrap();
+        phone.save(&s.renamed("Renamed").unwrap()).await.unwrap();
+
+        let plan = laptop
+            .preview_import(&phone.export().await.unwrap(), history::ImportMode::Merge)
+            .await
+            .unwrap();
+        assert_eq!(
+            import_summary(&plan),
+            ImportSummary {
+                added: 1,
+                updated: 0,
+                removed: 0,
+                conflicts: vec![ConflictView {
+                    name: "Renamed".into(),
+                    kept: KeptSide::Backup,
+                    kept_deleted: false,
+                }],
+            }
+        );
+    }
+
+    #[test]
+    fn saving_a_backup_replaces_the_file_whole() {
+        let dir = std::env::temp_dir().join(format!("epicycle-test-{}", Uuid::now_v7()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("backup.json");
+        std::fs::write(&path, "older and longer contents").unwrap();
+        write_replacing(&path, b"new").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "new");
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

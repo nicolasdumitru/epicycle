@@ -4,6 +4,7 @@
 	import type { Overview } from '#lib/bindings/Overview.ts';
 	import type { SubscriptionView } from '#lib/bindings/SubscriptionView.ts';
 	import AddSubscription from '#lib/components/AddSubscription.svelte';
+	import BackupPanel from '#lib/components/BackupPanel.svelte';
 	import {
 		daysBetween,
 		describeBilling,
@@ -145,6 +146,8 @@
 				</ul>
 			{/if}
 		</section>
+
+		<BackupPanel today={overview.today} onImported={(updated) => (overview = updated)} />
 	{:else if !error}
 		<p class="muted">Loading…</p>
 	{/if}

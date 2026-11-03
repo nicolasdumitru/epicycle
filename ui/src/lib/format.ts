@@ -2,6 +2,8 @@
 // deterministic; the UI passes `undefined` to use the device's locale.
 
 import type { Billing } from './bindings/Billing';
+import type { ConflictView } from './bindings/ConflictView';
+import type { ImportSummary } from './bindings/ImportSummary';
 import type { MoneyView } from './bindings/MoneyView';
 
 type Locale = string | undefined;
@@ -89,4 +91,37 @@ export function describeBilling(billing: Billing, nextPayment: string | null, lo
 /** True if the billing period is a month already, so a monthly equivalent adds nothing. */
 export function isMonthly(billing: Billing): boolean {
 	return billing.unit === 'months' && billing.every === 1;
+}
+
+function subscriptions(n: number): string {
+	return n === 1 ? '1 subscription' : `${n} subscriptions`;
+}
+
+/**
+ * One sentence per kind of change an import makes: "Adds 2 subscriptions."
+ * `done` switches to the past tense, for after the import.
+ */
+export function describeImport(summary: ImportSummary, done: boolean): string[] {
+	const verbs = done
+		? { added: 'Added', updated: 'Updated', removed: 'Removed' }
+		: { added: 'Adds', updated: 'Updates', removed: 'Removes' };
+	const lines = (['added', 'updated', 'removed'] as const)
+		.filter((kind) => summary[kind] > 0)
+		.map((kind) => `${verbs[kind]} ${subscriptions(summary[kind])}.`);
+	if (lines.length === 0 && summary.conflicts.length === 0) {
+		lines.push(
+			done
+				? 'Nothing changed: this device already had everything in the backup.'
+				: 'Nothing to change: this device already has everything in the backup.'
+		);
+	}
+	return lines;
+}
+
+/** "Music: keeps the backup's version" for a subscription changed on both sides. */
+export function describeConflict(conflict: ConflictView, done: boolean): string {
+	const verb = done ? 'kept' : 'keeps';
+	const side = conflict.kept === 'device' ? "this device's" : "the backup's";
+	const what = conflict.keptDeleted ? 'deletion' : 'version';
+	return `${conflict.name}: ${verb} ${side} ${what}`;
 }
