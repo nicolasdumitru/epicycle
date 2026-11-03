@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT currency, date, source, per_eur, recorded_at FROM exchange_rates\n             ORDER BY currency, date, source",
+  "query": "SELECT currency, date, source, per_eur, recorded_at FROM exchange_rates\n         ORDER BY currency, date, source",
   "describe": {
     "columns": [
       {
@@ -70,5 +70,5 @@
       false
     ]
   },
-  "hash": "a5670bbce8f4f5f57ffc1cbea8e0543aef097b6df8e2e7e88639cb8b93aa133d"
+  "hash": "8aee00d4fde832217d537a8bb184f0fdf24eecd69d02143a6d6863aee72449e0"
 }

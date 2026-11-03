@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { addSubscription, getCurrencies } from '#lib/api.ts';
+	import { addSubscription, getCurrencies, getFavorites } from '#lib/api.ts';
 	import type { CurrencyOption } from '#lib/bindings/CurrencyOption.ts';
 	import type { Overview } from '#lib/bindings/Overview.ts';
 	import type { Unit } from '#lib/bindings/Unit.ts';
 	import { billingUnits as units } from '#lib/format.ts';
 	import CurrencyInput from './CurrencyInput.svelte';
 	import DateInput from './DateInput.svelte';
+	import FavoriteChips from './FavoriteChips.svelte';
 
 	let {
 		today,
@@ -26,10 +27,11 @@
 	let saving = $state(false);
 	let nameInput: HTMLInputElement | undefined = $state();
 	let currencies = $state<CurrencyOption[]>([]);
+	let favorites = $state<string[]>([]);
 
 	onMount(async () => {
 		try {
-			currencies = await getCurrencies();
+			[currencies, favorites] = await Promise.all([getCurrencies(), getFavorites()]);
 		} catch (e) {
 			error = String(e);
 		}
@@ -84,6 +86,7 @@
 			<CurrencyInput bind:value={currency} options={currencies} label="Currency" />
 		</div>
 	</div>
+	<FavoriteChips {favorites} bind:value={currency} label="Currency" />
 
 	<fieldset>
 		<legend>Billed every</legend>

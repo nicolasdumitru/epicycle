@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::str::FromStr;
 
-use epicycle_core::backup::{Backup, Settings};
+use epicycle_core::backup::{Backup, RateChanges, RateImport, Settings, import_manual_rates};
 use epicycle_core::fx::{Rate, RateSource, RateTable};
 use epicycle_core::history::{
     Cause, History, HistoryError, HistoryReplacement, ImportMode, ImportPlan, NewHead, Revision,
@@ -239,6 +239,7 @@ impl Db {
             device_id: self.device_id,
             settings: settings(&mut conn).await?,
             history: load_history(&mut conn).await?,
+            manual_rates: manual_rates(&mut conn).await?,
         })
     }
 
@@ -247,18 +248,35 @@ impl Db {
         &self,
         backup: &Backup,
         mode: ImportMode,
-    ) -> Result<ImportPlan, DbError> {
+    ) -> Result<(ImportPlan, RateChanges), DbError> {
         let mut conn = self.pool.acquire().await?;
         let local = load_history(&mut conn).await?;
-        Ok(plan_import(&local, &backup.history, mode)?)
+        let rates = import_manual_rates(
+            &manual_rates(&mut conn).await?,
+            &backup.manual_rates,
+            rate_import(mode),
+        );
+        Ok((plan_import(&local, &backup.history, mode)?, rates))
     }
 
     /// Imports a backup in one transaction: either all of it applies or, on any
     /// error, nothing does. Returns what was done.
-    pub async fn import(&self, backup: &Backup, mode: ImportMode) -> Result<ImportPlan, DbError> {
+    ///
+    /// Manual exchange rates are merged as [`rate_import`] says. Settings stay
+    /// as they are on Merge and come from the backup on Replace.
+    pub async fn import(
+        &self,
+        backup: &Backup,
+        mode: ImportMode,
+    ) -> Result<(ImportPlan, RateChanges), DbError> {
         let mut tx = self.pool.begin().await?;
         let local = load_history(&mut tx).await?;
         let plan = plan_import(&local, &backup.history, mode)?;
+        let rates = import_manual_rates(
+            &manual_rates(&mut tx).await?,
+            &backup.manual_rates,
+            rate_import(mode),
+        );
 
         // Parents first, so every parent exists when its child is inserted.
         for revision in &plan.new_revisions {
@@ -283,37 +301,45 @@ impl Db {
                 None => remove_current(&mut tx, change.subscription_id).await?,
             }
         }
+        write_manual_rates(&mut tx, &rates.rates).await?;
         if mode == ImportMode::Replace {
-            let currency = backup.settings.reporting_currency.code();
-            sqlx::query!(
-                "UPDATE app_state SET reporting_currency = ? WHERE id = 1",
-                currency
-            )
-            .execute(&mut *tx)
-            .await?;
+            write_settings(&mut tx, &backup.settings).await?;
         }
         tx.commit().await?;
-        Ok(plan)
+        Ok((plan, rates))
     }
 
     /// What [`Db::replace_history`] would do, without changing anything.
     pub async fn preview_history_replacement(
         &self,
         backup: &Backup,
-    ) -> Result<HistoryReplacement, DbError> {
+    ) -> Result<(HistoryReplacement, RateChanges), DbError> {
         let mut conn = self.pool.acquire().await?;
         let local = load_history(&mut conn).await?;
-        Ok(plan_history_replacement(&local, &backup.history))
+        let rates = import_manual_rates(
+            &manual_rates(&mut conn).await?,
+            &backup.manual_rates,
+            RateImport::Exact,
+        );
+        Ok((plan_history_replacement(&local, &backup.history), rates))
     }
 
     /// Makes this device's history exactly the backup's, with its settings.
     /// Revisions only on this device are permanently deleted: this is the one
     /// operation that erases history, and the UI asks for confirmation first.
     /// One transaction, like [`Db::import`].
-    pub async fn replace_history(&self, backup: &Backup) -> Result<HistoryReplacement, DbError> {
+    pub async fn replace_history(
+        &self,
+        backup: &Backup,
+    ) -> Result<(HistoryReplacement, RateChanges), DbError> {
         let mut tx = self.pool.begin().await?;
         let local = load_history(&mut tx).await?;
         let plan = plan_history_replacement(&local, &backup.history);
+        let rates = import_manual_rates(
+            &manual_rates(&mut tx).await?,
+            &backup.manual_rates,
+            RateImport::Exact,
+        );
 
         // Current state first, since it refers to revisions. Plans and status
         // changes go with it (ON DELETE CASCADE). Deleting every revision in one
@@ -335,15 +361,10 @@ impl Db {
                 .expect("a current subscription has a head");
             write_current(&mut tx, subscription, head.id).await?;
         }
-        let currency = backup.settings.reporting_currency.code();
-        sqlx::query!(
-            "UPDATE app_state SET reporting_currency = ? WHERE id = 1",
-            currency
-        )
-        .execute(&mut *tx)
-        .await?;
+        write_manual_rates(&mut tx, &rates.rates).await?;
+        write_settings(&mut tx, &backup.settings).await?;
         tx.commit().await?;
-        Ok(plan)
+        Ok((plan, rates))
     }
 
     /// Subscriptions whose latest revision is a deletion, most recently
@@ -362,60 +383,29 @@ impl Db {
 
     /// Every stored exchange rate.
     pub async fn rates(&self) -> Result<RateTable, DbError> {
-        let rows = sqlx::query!(
-            "SELECT currency, date, source, per_eur, recorded_at FROM exchange_rates
-             ORDER BY currency, date, source"
-        )
-        .fetch_all(&self.pool)
-        .await?;
-        let rates = rows
-            .into_iter()
-            .map(|row| {
-                let at: Timestamp = row.recorded_at.parse().map_err(corrupt)?;
-                let source = match row.source.as_str() {
-                    "ecb" => RateSource::Ecb { fetched_at: at },
-                    "manual" => RateSource::Manual { entered_at: at },
-                    other => return Err(corrupt(format_args!("unknown rate source {other:?}"))),
-                };
-                Rate::new(
-                    row.currency.parse().map_err(corrupt)?,
-                    parse_date(&row.date)?,
-                    Decimal::from_str(&row.per_eur).map_err(corrupt)?,
-                    source,
-                )
-                .map_err(corrupt)
-            })
-            .collect::<Result<Vec<_>, _>>()?;
-        Ok(RateTable::new(rates))
+        let mut conn = self.pool.acquire().await?;
+        Ok(RateTable::new(load_rates(&mut conn).await?))
     }
 
     /// Stores rates, replacing any with the same currency, date and source.
     pub async fn save_rates(&self, rates: &[Rate]) -> Result<(), DbError> {
         let mut tx = self.pool.begin().await?;
         for rate in rates {
-            let currency = rate.currency().code();
-            let date = rate.date().to_string();
-            let per_eur = rate.per_eur().to_string();
-            let (source, at) = match rate.source() {
-                RateSource::Ecb { fetched_at } => ("ecb", fetched_at),
-                RateSource::Manual { entered_at } => ("manual", entered_at),
-            };
-            let at = at.to_string();
-            sqlx::query!(
-                "INSERT INTO exchange_rates (currency, date, source, per_eur, recorded_at)
-                 VALUES (?, ?, ?, ?, ?)
-                 ON CONFLICT (currency, date, source) DO UPDATE SET
-                     per_eur = excluded.per_eur,
-                     recorded_at = excluded.recorded_at",
-                currency,
-                date,
-                source,
-                per_eur,
-                at
-            )
-            .execute(&mut *tx)
-            .await?;
+            insert_rate(&mut tx, rate).await?;
         }
+        tx.commit().await?;
+        Ok(())
+    }
+
+    /// Favourite currencies, in the user's order.
+    pub async fn favorites(&self) -> Result<Vec<Currency>, DbError> {
+        let mut conn = self.pool.acquire().await?;
+        Ok(settings(&mut conn).await?.favorite_currencies)
+    }
+
+    pub async fn set_favorites(&self, favorites: &[Currency]) -> Result<(), DbError> {
+        let mut tx = self.pool.begin().await?;
+        write_favorites(&mut tx, favorites).await?;
         tx.commit().await?;
         Ok(())
     }
@@ -571,9 +561,129 @@ async fn settings(conn: &mut SqliteConnection) -> Result<Settings, DbError> {
     let row = sqlx::query!("SELECT reporting_currency FROM app_state WHERE id = 1")
         .fetch_one(&mut *conn)
         .await?;
+    let favorites = sqlx::query!("SELECT currency FROM favorite_currencies ORDER BY position")
+        .fetch_all(&mut *conn)
+        .await?;
     Ok(Settings {
         reporting_currency: row.reporting_currency.parse().map_err(corrupt)?,
+        favorite_currencies: favorites
+            .into_iter()
+            .map(|r| r.currency.parse().map_err(corrupt))
+            .collect::<Result<_, _>>()?,
     })
+}
+
+async fn write_settings(conn: &mut SqliteConnection, settings: &Settings) -> Result<(), DbError> {
+    let currency = settings.reporting_currency.code();
+    sqlx::query!(
+        "UPDATE app_state SET reporting_currency = ? WHERE id = 1",
+        currency
+    )
+    .execute(&mut *conn)
+    .await?;
+    write_favorites(conn, &settings.favorite_currencies).await
+}
+
+/// Replaces the favourites. Duplicates keep their first position.
+async fn write_favorites(
+    conn: &mut SqliteConnection,
+    favorites: &[Currency],
+) -> Result<(), DbError> {
+    sqlx::query!("DELETE FROM favorite_currencies")
+        .execute(&mut *conn)
+        .await?;
+    for (position, currency) in (0_i64..).zip(favorites) {
+        let code = currency.code();
+        sqlx::query!(
+            "INSERT INTO favorite_currencies (currency, position) VALUES (?, ?)
+             ON CONFLICT (currency) DO NOTHING",
+            code,
+            position
+        )
+        .execute(&mut *conn)
+        .await?;
+    }
+    Ok(())
+}
+
+async fn load_rates(conn: &mut SqliteConnection) -> Result<Vec<Rate>, DbError> {
+    let rows = sqlx::query!(
+        "SELECT currency, date, source, per_eur, recorded_at FROM exchange_rates
+         ORDER BY currency, date, source"
+    )
+    .fetch_all(&mut *conn)
+    .await?;
+    rows.into_iter()
+        .map(|row| {
+            let at: Timestamp = row.recorded_at.parse().map_err(corrupt)?;
+            let source = match row.source.as_str() {
+                "ecb" => RateSource::Ecb { fetched_at: at },
+                "manual" => RateSource::Manual { entered_at: at },
+                other => return Err(corrupt(format_args!("unknown rate source {other:?}"))),
+            };
+            Rate::new(
+                row.currency.parse().map_err(corrupt)?,
+                parse_date(&row.date)?,
+                Decimal::from_str(&row.per_eur).map_err(corrupt)?,
+                source,
+            )
+            .map_err(corrupt)
+        })
+        .collect()
+}
+
+async fn manual_rates(conn: &mut SqliteConnection) -> Result<Vec<Rate>, DbError> {
+    Ok(load_rates(conn)
+        .await?
+        .into_iter()
+        .filter(|r| matches!(r.source(), RateSource::Manual { .. }))
+        .collect())
+}
+
+async fn insert_rate(conn: &mut SqliteConnection, rate: &Rate) -> Result<(), DbError> {
+    let currency = rate.currency().code();
+    let date = rate.date().to_string();
+    let per_eur = rate.per_eur().to_string();
+    let (source, at) = match rate.source() {
+        RateSource::Ecb { fetched_at } => ("ecb", fetched_at),
+        RateSource::Manual { entered_at } => ("manual", entered_at),
+    };
+    let at = at.to_string();
+    sqlx::query!(
+        "INSERT INTO exchange_rates (currency, date, source, per_eur, recorded_at)
+         VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT (currency, date, source) DO UPDATE SET
+             per_eur = excluded.per_eur,
+             recorded_at = excluded.recorded_at",
+        currency,
+        date,
+        source,
+        per_eur,
+        at
+    )
+    .execute(&mut *conn)
+    .await?;
+    Ok(())
+}
+
+/// Replaces every manual rate with `rates`. ECB rates are left alone.
+async fn write_manual_rates(conn: &mut SqliteConnection, rates: &[Rate]) -> Result<(), DbError> {
+    sqlx::query!("DELETE FROM exchange_rates WHERE source = 'manual'")
+        .execute(&mut *conn)
+        .await?;
+    for rate in rates {
+        insert_rate(conn, rate).await?;
+    }
+    Ok(())
+}
+
+/// How each import mode treats manual exchange rates: Merge keeps this
+/// device's where both have one, Replace takes the backup's but loses nothing.
+fn rate_import(mode: ImportMode) -> RateImport {
+    match mode {
+        ImportMode::Merge => RateImport::KeepLocal,
+        ImportMode::Replace => RateImport::PreferBackup,
+    }
 }
 
 async fn insert_revision(conn: &mut SqliteConnection, revision: &Revision) -> Result<(), DbError> {
@@ -1026,8 +1136,8 @@ mod tests {
             .import(&backup_of(&original).await, ImportMode::Merge)
             .await
             .unwrap();
-        assert_eq!(plan.added(), 2);
-        assert_eq!(plan.conflicts().count(), 0);
+        assert_eq!(plan.0.added(), 2);
+        assert_eq!(plan.0.conflicts().count(), 0);
 
         // Same subscriptions, and exporting again gives the same backup.
         assert_eq!(
@@ -1045,7 +1155,8 @@ mod tests {
                 .import(&backup_of(&original).await, mode)
                 .await
                 .unwrap();
-            assert_eq!(again, ImportPlan::default());
+            assert_eq!(again.0, ImportPlan::default());
+            assert_eq!(again.1.changed, 0);
             assert_eq!(
                 copy.export().await.unwrap().history,
                 original.export().await.unwrap().history
@@ -1072,7 +1183,7 @@ mod tests {
             .import(&backup_of(&phone).await, ImportMode::Merge)
             .await
             .unwrap();
-        let conflicts: Vec<_> = plan.conflicts().collect();
+        let conflicts: Vec<_> = plan.0.conflicts().collect();
         assert_eq!(conflicts.len(), 1);
         assert_eq!(conflicts[0].kept, Side::Local);
         assert_eq!(laptop.subscriptions().await.unwrap()[0].name(), "Laptop");
@@ -1092,8 +1203,8 @@ mod tests {
             .import(&backup_of(&laptop).await, ImportMode::Merge)
             .await
             .unwrap();
-        assert_eq!(plan.conflicts().count(), 0);
-        assert_eq!(plan.updated(), 1);
+        assert_eq!(plan.0.conflicts().count(), 0);
+        assert_eq!(plan.0.updated(), 1);
         assert_eq!(phone.subscriptions().await.unwrap()[0].name(), "Laptop");
         assert_eq!(
             phone.export().await.unwrap().history,
@@ -1109,7 +1220,7 @@ mod tests {
             .import(&backup_of(&phone).await, ImportMode::Merge)
             .await
             .unwrap();
-        assert_eq!(plan.conflicts().count(), 0);
+        assert_eq!(plan.0.conflicts().count(), 0);
         assert_eq!(
             laptop.subscriptions().await.unwrap()[0].name(),
             "Phone again"
@@ -1124,7 +1235,7 @@ mod tests {
         let old = backup_of(&db).await;
         db.delete(s.id()).await.unwrap();
         let plan = db.import(&old, ImportMode::Merge).await.unwrap();
-        assert_eq!(plan, ImportPlan::default());
+        assert_eq!(plan.0, ImportPlan::default());
         assert!(db.subscriptions().await.unwrap().is_empty());
     }
 
@@ -1147,7 +1258,7 @@ mod tests {
             .preview_import(&backup, ImportMode::Replace)
             .await
             .unwrap();
-        assert_eq!((preview.added(), preview.removed()), (1, 1));
+        assert_eq!((preview.0.added(), preview.0.removed()), (1, 1));
         // Previewing changes nothing.
         assert_eq!(
             db.subscriptions().await.unwrap(),
@@ -1185,7 +1296,7 @@ mod tests {
         let backup = backup_of(&other).await;
         let preview = db.preview_history_replacement(&backup).await.unwrap();
         assert_eq!(
-            preview,
+            preview.0,
             HistoryReplacement {
                 added: 1,
                 updated: 0,
@@ -1208,6 +1319,99 @@ mod tests {
         let edited = theirs.renamed("Theirs 3").unwrap();
         db.save(&edited).await.unwrap();
         assert_eq!(db.history(theirs.id()).await.unwrap().len(), 3);
+    }
+
+    fn manual(code: &str, per_eur: &str) -> Rate {
+        Rate::new(
+            code.parse().unwrap(),
+            date(2026, 11, 1),
+            per_eur.parse().unwrap(),
+            RateSource::Manual {
+                entered_at: Timestamp::UNIX_EPOCH,
+            },
+        )
+        .unwrap()
+    }
+
+    #[tokio::test]
+    async fn backups_carry_favorites_and_manual_rates() {
+        let ron: Currency = "RON".parse().unwrap();
+        let usd: Currency = "USD".parse().unwrap();
+        let phone = Db::open_in_memory().await.unwrap();
+        phone
+            .set_favorites(&[ron, Currency::EUR, usd])
+            .await
+            .unwrap();
+        phone
+            .save_rates(&[manual("MDL", "19.6"), manual("RON", "5.1")])
+            .await
+            .unwrap();
+        let backup = backup_of(&phone).await;
+        assert_eq!(backup.manual_rates.len(), 2);
+        assert_eq!(
+            backup.settings.favorite_currencies,
+            [ron, Currency::EUR, usd]
+        );
+
+        // Merge brings the rates but keeps this device's settings and, where
+        // both have a rate for the same day, this device's rate.
+        let laptop = Db::open_in_memory().await.unwrap();
+        laptop.save_rates(&[manual("RON", "5.0")]).await.unwrap();
+        let (_, rates) = laptop.import(&backup, ImportMode::Merge).await.unwrap();
+        assert_eq!((rates.changed, rates.removed), (1, 0));
+        assert!(laptop.favorites().await.unwrap().is_empty());
+        let table = laptop.rates().await.unwrap();
+        assert_eq!(
+            table
+                .rate_for(ron, date(2026, 11, 1))
+                .unwrap()
+                .per_eur()
+                .to_string(),
+            "5.0"
+        );
+
+        // Replace takes the settings and the backup's rates.
+        laptop.import(&backup, ImportMode::Replace).await.unwrap();
+        assert_eq!(laptop.favorites().await.unwrap(), [ron, Currency::EUR, usd]);
+        let table = laptop.rates().await.unwrap();
+        assert_eq!(
+            table
+                .rate_for(ron, date(2026, 11, 1))
+                .unwrap()
+                .per_eur()
+                .to_string(),
+            "5.1"
+        );
+
+        // Replacing the history leaves exactly the backup's manual rates, and
+        // keeps cached ECB rates.
+        let other = Db::open_in_memory().await.unwrap();
+        other
+            .save_rates(&[
+                manual("CHF", "0.93"),
+                Rate::new(
+                    usd,
+                    date(2026, 11, 2),
+                    "1.12".parse().unwrap(),
+                    RateSource::Ecb {
+                        fetched_at: Timestamp::UNIX_EPOCH,
+                    },
+                )
+                .unwrap(),
+            ])
+            .await
+            .unwrap();
+        let (_, rates) = other.replace_history(&backup).await.unwrap();
+        assert_eq!((rates.changed, rates.removed), (2, 1));
+        let codes: Vec<&str> = other
+            .rates()
+            .await
+            .unwrap()
+            .iter()
+            .map(|r| r.currency().code())
+            .collect();
+        assert_eq!(codes, ["MDL", "RON", "USD"]);
+        assert_eq!(other.favorites().await.unwrap(), [ron, Currency::EUR, usd]);
     }
 
     #[tokio::test]

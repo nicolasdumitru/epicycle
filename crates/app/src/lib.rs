@@ -38,6 +38,8 @@ pub fn run() {
             commands::add_manual_rate,
             commands::delete_manual_rate,
             commands::set_reporting_currency,
+            commands::favorite_currencies,
+            commands::set_favorite_currencies,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Epicycle");

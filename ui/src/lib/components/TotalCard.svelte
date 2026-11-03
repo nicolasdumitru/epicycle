@@ -7,7 +7,9 @@
 	import {
 		getConvertedTotal,
 		getCurrencies,
+		getFavorites,
 		onRatesUpdated,
+		setFavorites,
 		setReportingCurrency
 	} from '#lib/api.ts';
 	import type { ConvertedTotal } from '#lib/bindings/ConvertedTotal.ts';
@@ -15,6 +17,7 @@
 	import type { MoneyView } from '#lib/bindings/MoneyView.ts';
 	import { describeRateSource, formatMoney, formatRate } from '#lib/format.ts';
 	import CurrencyInput from './CurrencyInput.svelte';
+	import FavoriteChips from './FavoriteChips.svelte';
 
 	let {
 		monthlyByCurrency,
@@ -30,6 +33,7 @@
 	const locale = undefined;
 
 	let options = $state<CurrencyOption[]>([]);
+	let favorites = $state<string[]>([]);
 	// Empty until the default currency is known.
 	let currency = $state('');
 	let total = $state<ConvertedTotal | null>(null);
@@ -55,7 +59,7 @@
 
 	onMount(async () => {
 		try {
-			options = await getCurrencies();
+			[options, favorites] = await Promise.all([getCurrencies(), getFavorites()]);
 			currency = (await getConvertedTotal(null)).defaultCurrency;
 		} catch (e) {
 			error = String(e);
@@ -63,6 +67,19 @@
 	});
 
 	$effect(() => onRatesUpdated(() => (ratesVersion += 1)));
+
+	const isFavorite = $derived(favorites.includes(currency));
+
+	async function toggleFavorite() {
+		if (!currency) return;
+		try {
+			favorites = await setFavorites(
+				isFavorite ? favorites.filter((c) => c !== currency) : [...favorites, currency]
+			);
+		} catch (e) {
+			error = String(e);
+		}
+	}
 
 	async function makeDefault() {
 		if (!total) return;
@@ -84,8 +101,24 @@
 		<h2 id="total-heading">Recurring commitment</h2>
 		<div class="picker">
 			<CurrencyInput bind:value={currency} {options} label="Shown in" />
+			<button
+				type="button"
+				class="star"
+				class:on={isFavorite}
+				onclick={toggleFavorite}
+				disabled={!currency}
+				aria-pressed={isFavorite}
+				aria-label={isFavorite
+					? `Remove ${currency} from favourites`
+					: `Add ${currency} to favourites`}
+				title={isFavorite ? 'Remove from favourites' : 'Add to favourites'}
+			>
+				{isFavorite ? '★' : '☆'}
+			</button>
 		</div>
 	</div>
+
+	<FavoriteChips {favorites} bind:value={currency} label="Show totals in" />
 
 	{#if total}
 		{#if total.missing.length > 0}
@@ -173,8 +206,30 @@
 	}
 
 	.picker {
-		width: 9rem;
+		display: flex;
+		align-items: end;
+		gap: 0.375rem;
 		flex: none;
+	}
+
+	.picker > :global(:first-child) {
+		width: 8rem;
+	}
+
+	/* Sits level with the input, below its label. */
+	.star {
+		width: 44px;
+		padding: 0;
+		margin-bottom: 1.6rem;
+		background: transparent;
+		border-color: var(--border);
+		color: var(--muted);
+		font-size: 1.25rem;
+	}
+
+	.star.on {
+		color: var(--accent);
+		border-color: var(--accent);
 	}
 
 	.stats {

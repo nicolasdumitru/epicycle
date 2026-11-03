@@ -124,8 +124,7 @@ separate:
   need, and Tauri already locks the same `reqwest` version.
 - **Rates are stored in `exchange_rates`**, keyed by currency, date and source,
   with the rate as exact decimal text. ECB rates are a cache; manual rates are the
-  user's data. **Manual rates are not in backups yet** (that is a format change,
-  version 3).
+  user's data, so they are in backups (format version 3).
 - **Totals refuse to guess**: if any currency involved has no rate at all, the
   converted total isn't shown, and the missing currencies are named.
 - **The reporting currency is the default for totals**; the dashboard can show
@@ -179,6 +178,19 @@ automatically.
   first. Amounts are integer minor units, dates ISO 8601, timestamps RFC 3339.
   `crates/core/testdata/` has a sample of each version; tests check that every
   one still imports, and that the latest exports unchanged.
+- **Old versions are temporary while the format is young.** Each new version
+  still reads the older ones for now; once the format settles, the oldest can be
+  dropped (2026-11-03, the user's call).
+- **Version 3** (2026-11-03) adds `settings.favorite_currencies` and
+  `manual_rates`, the exchange rates the user entered (ECB rates are re-fetched,
+  not backed up). Older files read as having neither.
+  - Merge adds the backup's manual rates; where both sides have one for the
+    same currency and day, this device's stays. Favourites stay as they are,
+    like other settings.
+  - Replace takes the backup's rate where both have one, keeps this device's
+    others (it loses nothing), and takes the backup's settings, favourites
+    included.
+  - Replacing the history leaves exactly the backup's manual rates and settings.
 - **Version 2** (2026-11-03) adds `notes` to subscriptions, left out when empty.
   Version 1 files are read as version 2 files without notes. The version went up
   even though nothing else changed, so that older apps refuse these files rather

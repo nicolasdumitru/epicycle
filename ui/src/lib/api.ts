@@ -85,3 +85,9 @@ export function onRatesUpdated(handler: () => void): () => void {
 		stop.then((unlisten) => unlisten());
 	};
 }
+
+/** Favourite currencies, in the user's order. */
+export const getFavorites = (): Promise<string[]> => invoke('favorite_currencies');
+
+export const setFavorites = (currencies: string[]): Promise<string[]> =>
+	invoke('set_favorite_currencies', { currencies });

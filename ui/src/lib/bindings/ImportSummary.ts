@@ -9,4 +9,13 @@ export type ImportSummary = { added: number, updated: number, removed: number, c
  * Changes in this device's history that would be permanently deleted;
  * only replacing the history deletes any.
  */
-lostRevisions: number, };
+lostRevisions: number, 
+/**
+ * Exchange rates entered by hand that are added or changed.
+ */
+ratesChanged: number, 
+/**
+ * Exchange rates entered by hand on this device that are deleted; only
+ * replacing the history deletes any.
+ */
+ratesRemoved: number, };
