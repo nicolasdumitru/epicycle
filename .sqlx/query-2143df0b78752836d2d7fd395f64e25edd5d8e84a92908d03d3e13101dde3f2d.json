@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT id, name, currency FROM subscriptions ORDER BY name COLLATE NOCASE, id",
+  "query": "SELECT id, name, currency, notes FROM subscriptions ORDER BY name COLLATE NOCASE, id",
   "describe": {
     "columns": [
       {
@@ -35,6 +35,17 @@
             "name": "currency"
           }
         }
+      },
+      {
+        "name": "notes",
+        "ordinal": 3,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "subscriptions",
+            "name": "notes"
+          }
+        }
       }
     ],
     "parameters": {
@@ -43,8 +54,9 @@
     "nullable": [
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "12e7ea1e6f0545ce164576d4501810bbb05d7f96e0b596ab43681be7b3e46e1f"
+  "hash": "2143df0b78752836d2d7fd395f64e25edd5d8e84a92908d03d3e13101dde3f2d"
 }
