@@ -108,41 +108,82 @@ separate:
   regular gap between ECB publications: Thursday to Tuesday over Easter. Manual
   rates are always shown as manual, never as fresh or stale.
 
-## Data history (to be finalised in the storage milestone)
+## Data history
 
 - **Every subscription change is logged forever.** Each change (create, edit, price
-  change, status change, delete, import) appends a full snapshot of the subscription
-  with a timestamp and cause. Deleting a subscription keeps its history.
-- **Merge conflicts on import**: when the same ID exists locally and in the backup,
-  the version with the later `updated_at` wins and a tie keeps the local version.
-  The import is logged with every conflict and both versions, so the user can switch
-  to the other version later.
-- **A Replace import first snapshots the whole database**, so it can be undone.
-- History stays on the device for now.
+  change, status change, delete, import) appends a revision: a full copy of the
+  subscription, with when, on which device and why. Deleting a subscription keeps
+  its history.
+- **History works like a Git repository with a single branch.** Revisions have
+  UUIDs, never auto-increment integers, so revisions made on different devices
+  can't collide. Each names the revision it replaces (its parent); a revision that
+  settles a conflict names both sides. Revisions are never rewritten: undoing a
+  change appends a new one.
+- **A subscription's latest revision is the one no other revision replaces**, not
+  the newest by ID or by time, which device clocks can't be trusted for.
+- **Importing a backup and, later, syncing devices are the same operation**:
+  merging one history into another (see "Backups").
 
-### Future direction: history in backups and sync (not built yet)
+### Future direction: syncing devices (not built yet)
 
-Eventually the change history will be included in backups and synced across
-devices, much like a Git repository with a single branch. Nothing is built for this
-yet, but the history design must not rule it out:
+Backups already carry the whole history and imports merge it, which is what
+syncing needs. What's missing is moving the history between devices
+automatically.
 
-- History entries get globally unique IDs (UUIDs), never auto-increment integers,
-  so entries made on different devices can't collide.
-- Each entry references the entry it replaces (its parent), as Git commits do.
-  Then two devices that edited the same subscription can be detected as having
-  diverged, rather than one silently overwriting the other.
-- Entries are append-only and never rewritten. Undoing a change appends a new
-  entry.
-- Each entry records the device it was made on and when.
-- Merging two diverged histories is the same problem as merge conflicts on import,
-  so the two should share one mechanism.
 - **Under consideration: syncing through storage the user already has** (Nextcloud,
   iCloud Drive, Google Drive), instead of a paid sync service. If we do this, the
   SQLite database must never sit in the synced folder: file-sync tools copy whole
   files without locking, and two devices writing to one database corrupt it or
   leave "conflicted copy" files. What would sync is the history: each device
   writes its new revisions as files to a shared folder and merges in the other
-  devices' files. The history design above is chosen so that this works.
+  devices' files, the same way an import does.
+
+## Backups
+
+- **A backup holds the whole change history and the settings**, as JSON. There is
+  no separate list of current subscriptions: the current state is each
+  subscription's latest revision, so the file can't contradict itself. Including
+  the history from the first version avoids supporting a second, history-less
+  format forever, and it is what lets imports tell outdated copies from conflicts.
+- **Format**: `{"format": "epicycle-backup", "version": 1, "exported_at",
+  "device_id", "settings", "revisions": [...]}`. Revisions are written parents
+  first. Amounts are integer minor units, dates ISO 8601, timestamps RFC 3339.
+  `crates/core/testdata/backup-v1.json` is a sample, and a test checks that it
+  still imports and exports unchanged.
+- **Versioning**: `version` covers the whole file and goes up on any change to
+  the format. The app reads every older version and refuses newer ones with a
+  message to update the app.
+- **Validation comes first.** The whole file is checked before the database is
+  touched: format and version, every subscription (the same rules as the app's own
+  data), each revision's subscription ID matching its contents, every parent
+  present in the file, no cycles, one latest revision per subscription, and no
+  revision ID that the device has with different contents. The import itself is
+  one transaction: all of it applies or none of it does. Before importing, the app
+  shows what the import will do.
+- **Merge import compares histories, subscription by subscription.** This
+  replaces the earlier plan of "the later `updated_at` wins", which brought deleted
+  subscriptions back when an old backup was imported, and let a device with a
+  wrong clock overwrite newer edits.
+  - Same latest revision on both sides: nothing to do.
+  - The backup's version is an older point in this device's history: keep this
+    device's. In particular, deleted subscriptions stay deleted.
+  - This device's version is an older point in the backup's history: take the
+    backup's.
+  - Both changed it separately (a conflict): the later change wins and a tie keeps
+    this device's. A new revision with both sides as parents records the result,
+    so the other version stays in the history and can be restored. The import
+    summary lists each conflict and which side was kept. Identical separate
+    changes are joined the same way but not reported as conflicts.
+  - Subscriptions only on this device are kept; only in the backup, added.
+  - Settings stay as they are on this device.
+- **Replace import makes this device match the backup, but erases nothing.** This
+  replaces the earlier plan of saving a copy of the database first: the history
+  already keeps everything, which matches "keep data forever".
+  - Subscriptions only on this device get a deletion revision.
+  - Subscriptions where this device differs get a new revision with the backup's
+    version, on top of this device's history (with both parents if they diverged).
+  - Settings come from the backup.
+  - Anything replaced can be restored from its history.
 
 ## Storage
 
@@ -152,9 +193,12 @@ yet, but the history design must not rule it out:
 - **History is the append-only `revisions` table.** Each revision holds a full JSON
   copy of the subscription, tagged with a format version so old copies can be
   upgraded when the format changes. A deletion is a revision with no copy.
-- **Revision IDs are UUIDv7.** They sort by creation time, so they order each
-  subscription's history. `created_at` is for display only.
+- **Revision IDs are UUIDv7**, so they sort roughly by creation time. Parent
+  links, not IDs or `created_at`, define the order of a history.
+- **A revision with two parents** stores the second in `merge_parent_id`: two
+  columns rather than a separate parents table, since there are never more than
+  two.
 - **Saving a subscription that didn't change records no revision.**
 - **Builds use the committed query metadata in `.sqlx/` and need no database.**
-  After changing a query or a migration, run `python3 scripts/sqlx_prepare.py`
+  After changing a query or a migration, run `just sqlx-prepare`
   and commit the result. CI runs it with `--check`.

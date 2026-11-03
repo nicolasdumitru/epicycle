@@ -5,9 +5,11 @@
 //! storage, no UI and no clock: callers pass "today" explicitly, which keeps every
 //! result reproducible in tests.
 
+pub mod backup;
 pub mod cashflow;
 pub mod commitment;
 pub mod fx;
+pub mod history;
 pub mod money;
 pub mod recurrence;
 pub mod subscription;

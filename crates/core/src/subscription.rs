@@ -18,6 +18,12 @@ use crate::recurrence::Schedule;
 #[serde(transparent)]
 pub struct SubscriptionId(pub Uuid);
 
+impl std::fmt::Display for SubscriptionId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 impl SubscriptionId {
     /// A new random ID. UUIDv7 sorts by creation time, which keeps database
     /// indexes compact.
