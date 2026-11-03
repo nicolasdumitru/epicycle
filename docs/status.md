@@ -114,6 +114,10 @@ Agreed order for the rest of milestone 1 (2026-11-03):
    locally. CI (`.github/workflows/android.yml`) hasn't run yet, and the release
    key doesn't exist yet: the user creates it with `just android-keystore` and
    adds the GitHub secrets it prints. Not yet tried on a phone; a friend will.
+9. **Windows build in CI** (2026-11-03, hasn't run yet):
+   `.github/workflows/windows.yml` runs the Rust tests on Windows and builds the
+   installers (unsigned, so SmartScreen warns). The user will test them on a
+   Windows PC. A likely snag is building the TLS library (`aws-lc-rs`).
 7. ~~Nix package~~ (done): `nix run github:nicolasdumitru/epicycle`, or in the
    system configuration (see the README). CI builds it.
 
