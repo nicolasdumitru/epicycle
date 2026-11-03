@@ -45,6 +45,10 @@
 	});
 
 	const months = $derived(chart?.months ?? []);
+	// Nothing paid and nothing committed in any month: no subscriptions yet.
+	const empty = $derived(
+		months.every((m) => Number(m.cashFlow.amount) === 0 && Number(m.commitment.amount) === 0)
+	);
 	const plotWidth = $derived(Math.max(width - margin.left - margin.right, 1));
 	const plotHeight = height - margin.top - margin.bottom;
 	const baseline = margin.top + plotHeight;
@@ -125,6 +129,10 @@
 		<p class="muted">
 			No exchange rate for {chart.missing.join(', ')}, so the chart can't be drawn.
 			<a href="/rates">Enter a rate</a>
+		</p>
+	{:else if chart && empty}
+		<p class="muted">
+			Nothing to chart yet. Once you add subscriptions, this shows what you pay each month.
 		</p>
 	{:else if chart}
 		<div class="card">

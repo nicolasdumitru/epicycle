@@ -38,6 +38,23 @@
 		}
 	});
 
+	// The list opens towards whichever side has room: rightwards from the
+	// field's left edge, or leftwards from its right edge when the field is
+	// near the right of the screen. Fixed to one side, it ran off phones.
+	let alignEnd = $state(false);
+	$effect(() => {
+		if (!open || !input) return;
+		const field = input.getBoundingClientRect();
+		const listWidth = Math.max(field.width, 16 * 16);
+		alignEnd = field.left + listWidth > window.innerWidth - 8;
+	});
+
+	// Selecting the code on focus lets a mouse or keyboard user type over it.
+	// On touch screens it pops up the system's cut/copy bar instead.
+	function selectOnFocus() {
+		if (!window.matchMedia('(pointer: coarse)').matches) input?.select();
+	}
+
 	// Block form submission until a listed currency is chosen.
 	$effect(() => {
 		input?.setCustomValidity(
@@ -136,7 +153,7 @@
 			{oninput}
 			{onkeydown}
 			{onblur}
-			onfocus={() => input?.select()}
+			onfocus={selectOnFocus}
 			onclick={browse}
 			role="combobox"
 			aria-expanded={open}
@@ -150,7 +167,7 @@
 			required
 		/>
 		{#if open && matches.length > 0}
-			<ul id="{id}-list" role="listbox" aria-label={label} bind:this={list}>
+			<ul id="{id}-list" role="listbox" aria-label={label} bind:this={list} class:end={alignEnd}>
 				{#each matches as option, i (option.code)}
 					<li
 						id="{id}-option-{i}"
@@ -195,8 +212,9 @@
 		position: absolute;
 		z-index: 10;
 		top: calc(100% + 0.25rem);
-		right: 0;
+		left: 0;
 		width: max(100%, 16rem);
+		max-width: calc(100vw - 2rem);
 		max-height: 16rem;
 		overflow-y: auto;
 		margin: 0;
@@ -206,6 +224,11 @@
 		border: 1px solid var(--border);
 		border-radius: 0.5rem;
 		box-shadow: 0 4px 16px rgb(0 0 0 / 0.15);
+	}
+
+	ul.end {
+		left: auto;
+		right: 0;
 	}
 
 	li {
