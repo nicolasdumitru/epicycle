@@ -78,7 +78,9 @@
 		scrollToActive(true);
 	}
 
-	function oninput() {
+	function oninput(event: Event) {
+		// Read the field itself: the binding to `text` may not have run yet.
+		text = (event.currentTarget as HTMLInputElement).value;
 		open = true;
 		searching = true;
 		active = 0;
