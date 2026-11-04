@@ -86,7 +86,7 @@
 
 <main>
 	<nav>
-		<a href="/" class="back">‹ Subscriptions</a>
+		<a href="/more" class="back">‹ More</a>
 	</nav>
 	<h1>Exchange rates</h1>
 	<p class="muted">
