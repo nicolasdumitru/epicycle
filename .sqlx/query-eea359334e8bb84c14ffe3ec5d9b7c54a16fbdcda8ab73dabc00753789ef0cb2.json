@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE app_state SET reminders_enabled = ?, reminders_time = ? WHERE id = 1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "eea359334e8bb84c14ffe3ec5d9b7c54a16fbdcda8ab73dabc00753789ef0cb2"
+}

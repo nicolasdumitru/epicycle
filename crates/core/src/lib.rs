@@ -13,4 +13,5 @@ pub mod fx;
 pub mod history;
 pub mod money;
 pub mod recurrence;
+pub mod reminders;
 pub mod subscription;

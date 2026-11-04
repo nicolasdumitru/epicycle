@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM reminder_lead_days",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": []
+  },
+  "hash": "0d2b28cd126333665fdd2ae6618e4e318bd1ee91dc77f5e3114539849f9ab9f3"
+}

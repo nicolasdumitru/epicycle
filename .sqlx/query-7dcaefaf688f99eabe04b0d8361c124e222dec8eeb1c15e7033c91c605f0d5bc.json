@@ -1,0 +1,50 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT reporting_currency, reminders_enabled, reminders_time FROM app_state WHERE id = 1",
+  "describe": {
+    "columns": [
+      {
+        "name": "reporting_currency",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "app_state",
+            "name": "reporting_currency"
+          }
+        }
+      },
+      {
+        "name": "reminders_enabled",
+        "ordinal": 1,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "app_state",
+            "name": "reminders_enabled"
+          }
+        }
+      },
+      {
+        "name": "reminders_time",
+        "ordinal": 2,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "app_state",
+            "name": "reminders_time"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "7dcaefaf688f99eabe04b0d8361c124e222dec8eeb1c15e7033c91c605f0d5bc"
+}
