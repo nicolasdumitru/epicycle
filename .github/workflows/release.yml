@@ -69,8 +69,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
           VERSION: ${{ needs.version.outputs.version }}
+        # Retried: GitHub's API sometimes fails with a temporary server error
+        # (v0.1.0 hit an HTTP 502). gh creates a draft, uploads the files and
+        # then publishes it, so a failed attempt can leave a draft behind; a
+        # retry finishes that draft instead of making a second release.
         run: |
-          gh release create "$GITHUB_REF_NAME" dist/* \
-            --verify-tag \
-            --title "Epicycle $VERSION" \
-            --generate-notes
+          for attempt in 1 2 3; do
+            if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+              gh release upload "$GITHUB_REF_NAME" dist/* --clobber &&
+                gh release edit "$GITHUB_REF_NAME" --draft=false &&
+                exit 0
+            elif gh release create "$GITHUB_REF_NAME" dist/* \
+              --verify-tag \
+              --title "Epicycle $VERSION" \
+              --generate-notes; then
+              exit 0
+            fi
+            echo "::warning::Publishing failed (attempt $attempt); retrying in 30 seconds."
+            sleep 30
+          done
+          exit 1
