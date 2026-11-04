@@ -43,6 +43,15 @@ Newest decisions are appended at the end of each section.
   limited to what the build reads, so documentation changes don't rebuild it.
   Tests aren't rerun in the package build; CI runs them.
 
+- **Releases are GitHub Releases, made by pushing a version tag** (2026-11-04).
+  `.github/workflows/release.yml` checks that the tag matches the version in
+  `Cargo.toml` and `tauri.conf.json`, calls the Android and Windows workflows
+  (which double as reusable workflows), and publishes their files with
+  `gh release create`. Release assets download without a GitHub account,
+  unlike run artifacts. A release APK must be signed: the Android workflow
+  fails rather than publish an unsigned one. Plain pushes of tags don't also
+  run the per-branch workflows.
+
 ## Platforms
 
 - Validation order: **NixOS desktop, then iOS**, then iPadOS, Windows, macOS, Android.

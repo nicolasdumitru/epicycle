@@ -4,18 +4,31 @@
 # (see scripts/android_keystore.py), so each build installs over the last one.
 # Without them (e.g. pull requests from forks), the APK is unsigned and can't
 # be installed. Download it from the run's "Artifacts".
+#
+# release.yml also calls this workflow to build the APK for a release; then a
+# missing signing key is an error rather than a warning.
 name: Android
 
 on:
+  # Branches only: release tags are built by release.yml.
   push:
+    branches: ["**"]
   pull_request:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      release:
+        description: Building for a release, so the APK must be signed.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
+# Named explicitly: when release.yml calls this workflow, github.workflow is
+# "Release", which would put it in the same group as the Windows build.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: android-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -37,8 +50,13 @@ jobs:
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          RELEASE: ${{ inputs.release }}
         run: |
           if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ]; then
+            if [ "$RELEASE" = "true" ]; then
+              echo "::error::No signing secrets: a release APK must be signed."
+              exit 1
+            fi
             echo "::warning::No signing secrets: the APK will be unsigned and can't be installed."
             exit 0
           fi

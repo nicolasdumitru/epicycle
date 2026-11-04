@@ -136,6 +136,9 @@ Agreed order for the rest of milestone 1 (2026-11-03):
    `.github/workflows/windows.yml` runs the Rust tests on Windows and builds the
    installers (unsigned, so SmartScreen warns). The user will test them on a
    Windows PC. A likely snag is building the TLS library (`aws-lc-rs`).
+10. **Releases** (2026-11-04): pushing a version tag publishes a GitHub Release
+    with the signed Android APK and the Windows installers. First release:
+    v0.1.0.
 7. ~~Nix package~~ (done): `nix run github:nicolasdumitru/epicycle`, or in the
    system configuration (see the README). CI builds it.
 

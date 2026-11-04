@@ -6,7 +6,9 @@
 name: iOS
 
 on:
+  # Branches only: release tags are built by release.yml.
   push:
+    branches: ["**"]
   pull_request:
   workflow_dispatch:
 

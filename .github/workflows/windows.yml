@@ -3,18 +3,25 @@
 # before installing. Download them from the run's "Artifacts".
 #
 # The Nix dev shell isn't used: it's for Linux. Versions match it.
+#
+# release.yml also calls this workflow to build the installers for a release.
 name: Windows
 
 on:
+  # Branches only: release tags are built by release.yml.
   push:
+    branches: ["**"]
   pull_request:
   workflow_dispatch:
+  workflow_call:
 
 permissions:
   contents: read
 
+# Named explicitly: when release.yml calls this workflow, github.workflow is
+# "Release", which would put it in the same group as the Android build.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: windows-${{ github.ref }}
   cancel-in-progress: true
 
 env:
