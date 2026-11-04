@@ -16,7 +16,9 @@ use epicycle_core::history::{
 };
 use epicycle_core::money::Currency;
 use epicycle_core::recurrence::{DayOfMonth, Month, Rule, Schedule};
-use epicycle_core::subscription::{Dated, Plan, Status, Subscription, SubscriptionId};
+use epicycle_core::subscription::{
+    Dated, Estimate, Expected, Plan, Status, Subscription, SubscriptionId,
+};
 use jiff::Timestamp;
 use jiff::civil::Date;
 use rust_decimal::Decimal;
@@ -32,7 +34,9 @@ use uuid::Uuid;
 /// - 1: the first format.
 /// - 2: adds `notes`, left out when empty. Version 1 snapshots read as version
 ///   2 snapshots without notes, so they need no upgrade.
-const SNAPSHOT_VERSION: i64 = 2;
+/// - 3: plans may have an `estimate`, left out for exact amounts. Older
+///   snapshots read unchanged.
+const SNAPSHOT_VERSION: i64 = 3;
 
 #[derive(Debug, Error)]
 pub enum DbError {
@@ -132,7 +136,8 @@ impl Db {
         .fetch_all(&self.pool)
         .await?;
         let plan_rows = sqlx::query!(
-            "SELECT subscription_id, effective_from, unit, every, month, day, anchor, amount
+            "SELECT subscription_id, effective_from, unit, every, month, day, anchor, amount,
+                    estimate_low, estimate_high, estimate_expected
              FROM plans ORDER BY subscription_id, effective_from"
         )
         .fetch_all(&self.pool)
@@ -153,6 +158,11 @@ impl Db {
                 value: Plan {
                     schedule,
                     amount: row.amount,
+                    estimate: estimate_from_columns(
+                        row.estimate_low,
+                        row.estimate_high,
+                        row.estimate_expected.as_deref(),
+                    )?,
                 },
             });
         }
@@ -774,10 +784,14 @@ async fn write_current(
         let (unit, every, month, day) = rule_columns(plan.value.schedule.rule());
         let from = plan.from.to_string();
         let anchor = plan.value.schedule.anchor().to_string();
+        let estimate = plan.value.estimate;
+        let (low, high) = (estimate.and_then(|e| e.low), estimate.and_then(|e| e.high));
+        let expected = estimate.map(|e| expected_as_str(e.expected));
         sqlx::query!(
             "INSERT INTO plans
-                 (subscription_id, effective_from, unit, every, month, day, anchor, amount)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                 (subscription_id, effective_from, unit, every, month, day, anchor, amount,
+                  estimate_low, estimate_high, estimate_expected)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             id,
             from,
             unit,
@@ -785,7 +799,10 @@ async fn write_current(
             month,
             day,
             anchor,
-            plan.value.amount
+            plan.value.amount,
+            low,
+            high,
+            expected
         )
         .execute(&mut *conn)
         .await?;
@@ -901,6 +918,35 @@ fn rule_from_columns(
     }
 }
 
+fn expected_as_str(expected: Expected) -> &'static str {
+    match expected {
+        Expected::Midpoint => "midpoint",
+        Expected::Bound => "bound",
+        Expected::Manual => "manual",
+    }
+}
+
+fn estimate_from_columns(
+    low: Option<i64>,
+    high: Option<i64>,
+    expected: Option<&str>,
+) -> Result<Option<Estimate>, DbError> {
+    let Some(expected) = expected else {
+        return Ok(None);
+    };
+    let expected = match expected {
+        "midpoint" => Expected::Midpoint,
+        "bound" => Expected::Bound,
+        "manual" => Expected::Manual,
+        other => return Err(corrupt(format_args!("unknown estimate rule {other:?}"))),
+    };
+    Ok(Some(Estimate {
+        low,
+        high,
+        expected,
+    }))
+}
+
 fn status_as_str(status: Status) -> &'static str {
     match status {
         Status::Active => "active",
@@ -933,6 +979,7 @@ mod tests {
         let plan = Plan {
             schedule: Schedule::new(rule, date(2026, 1, 31)).unwrap(),
             amount: 1299,
+            estimate: None,
         };
         Subscription::new(
             SubscriptionId::generate(),
@@ -953,6 +1000,7 @@ mod tests {
         Plan {
             schedule: Schedule::new(rule, anchor).unwrap(),
             amount,
+            estimate: None,
         }
     }
 
@@ -977,6 +1025,7 @@ mod tests {
                     )
                     .unwrap(),
                     amount: 250,
+                    estimate: None,
                 },
             )
             .unwrap()
@@ -984,7 +1033,25 @@ mod tests {
             .unwrap()
             .with_status(date(2026, 4, 1), Status::Active)
             .unwrap()
-            .with_notes("Shared with the family.\nCancel before the price rise.");
+            .with_notes("Shared with the family.\nCancel before the price rise.")
+            .with_plan(
+                date(2027, 6, 1),
+                Plan::estimated(
+                    Schedule::new(
+                        Rule::Weeks {
+                            every: NonZeroU16::MIN,
+                        },
+                        date(2027, 6, 1),
+                    )
+                    .unwrap(),
+                    Some(200),
+                    Some(301),
+                    Expected::Midpoint,
+                    None,
+                )
+                .unwrap(),
+            )
+            .unwrap();
         db.save(&s).await.unwrap();
         assert_eq!(db.subscriptions().await.unwrap(), std::slice::from_ref(&s));
         let history = db.history(s.id()).await.unwrap();
@@ -1095,19 +1162,40 @@ mod tests {
         let id = s.id().0.to_string();
         // A monthly rule needs a day; a negative amount is never valid.
         let missing_day = sqlx::query(
-            "INSERT INTO plans VALUES (?, '2027-01-01', 'months', 1, NULL, NULL, '2027-01-01', 100)",
+            "INSERT INTO plans (subscription_id, effective_from, unit, every, month, day, anchor, amount)
+             VALUES (?, '2027-01-01', 'months', 1, NULL, NULL, '2027-01-01', 100)",
         )
         .bind(&id)
         .execute(&db.pool)
         .await;
         assert!(missing_day.is_err());
         let negative = sqlx::query(
-            "INSERT INTO plans VALUES (?, '2027-01-01', 'days', 1, NULL, NULL, '2027-01-01', -5)",
+            "INSERT INTO plans (subscription_id, effective_from, unit, every, month, day, anchor, amount)
+             VALUES (?, '2027-01-01', 'days', 1, NULL, NULL, '2027-01-01', -5)",
         )
         .bind(&id)
         .execute(&db.pool)
         .await;
         assert!(negative.is_err());
+        // An estimate needs a bound, and its bounds must be in order.
+        for (low, high, expected) in [
+            (None, None, Some("midpoint")),
+            (Some(300), Some(200), Some("midpoint")),
+            (Some(200), None, None),
+        ] {
+            let bad_estimate = sqlx::query(
+                "INSERT INTO plans (subscription_id, effective_from, unit, every, month, day,
+                     anchor, amount, estimate_low, estimate_high, estimate_expected)
+                 VALUES (?, '2027-01-01', 'days', 1, NULL, NULL, '2027-01-01', 250, ?, ?, ?)",
+            )
+            .bind(&id)
+            .bind(low)
+            .bind(high)
+            .bind(expected)
+            .execute(&db.pool)
+            .await;
+            assert!(bad_estimate.is_err(), "{low:?} {high:?} {expected:?}");
+        }
         // A second parent needs a first one, and a different one.
         for (parent, merge_parent) in [(None, Some(&first)), (Some(&first), Some(&first))] {
             let bad_merge = sqlx::query(

@@ -384,6 +384,7 @@ fn plan_of(
     Ok(Plan {
         schedule: Schedule::new(rule, next)?,
         amount: amount.minor,
+        estimate: None,
     })
 }
 

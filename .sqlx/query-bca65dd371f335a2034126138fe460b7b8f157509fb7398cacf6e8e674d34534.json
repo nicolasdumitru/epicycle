@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO plans\n                 (subscription_id, effective_from, unit, every, month, day, anchor, amount,\n                  estimate_low, estimate_high, estimate_expected)\n             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 11
+    },
+    "nullable": []
+  },
+  "hash": "bca65dd371f335a2034126138fe460b7b8f157509fb7398cacf6e8e674d34534"
+}

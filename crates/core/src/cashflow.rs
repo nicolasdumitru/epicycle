@@ -113,6 +113,7 @@ mod tests {
         Plan {
             schedule: Schedule::new(rule, anchor).unwrap(),
             amount,
+            estimate: None,
         }
     }
 
