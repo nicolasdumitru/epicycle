@@ -113,6 +113,8 @@ real phone.
   one-off changes"). Snapshot format version 3, backup format version 4.
 - Later: the expected amount estimated from past payments (one-off changes
   record what was actually paid, which is what it needs).
+- Later, once the user decides what they want: a clearer monthly chart table,
+  especially for the current month (part paid, part still due).
 
 ## Next steps
 
