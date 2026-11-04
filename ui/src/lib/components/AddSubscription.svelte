@@ -23,6 +23,7 @@
 	// svelte-ignore state_referenced_locally (only the initial value is wanted)
 	let nextPayment = $state(today);
 	let since = $state('');
+	let notes = $state('');
 	let error = $state<string | null>(null);
 	let saving = $state(false);
 	let nameInput: HTMLInputElement | undefined = $state();
@@ -52,7 +53,8 @@
 				every,
 				unit,
 				nextPayment,
-				since: since === '' ? null : since
+				since: since === '' ? null : since,
+				notes
 			});
 			onAdded(overview);
 		} catch (e) {
@@ -123,6 +125,15 @@
 		{today}
 	/>
 
+	<label>
+		Notes <span class="optional">(optional)</span>
+		<textarea
+			bind:value={notes}
+			rows="3"
+			placeholder="Anything worth remembering: who shares it, how to cancel, …"
+		></textarea>
+	</label>
+
 	{#if error}
 		<p class="error" role="alert">{error}</p>
 	{/if}
@@ -177,6 +188,26 @@
 
 	.currency {
 		width: 8rem;
+	}
+
+	.optional {
+		color: var(--muted);
+		font-size: 0.875rem;
+		font-weight: 400;
+	}
+
+	textarea {
+		font: inherit;
+		font-size: max(1rem, 16px);
+		box-sizing: border-box;
+		width: 100%;
+		padding: 0.5rem 0.75rem;
+		color: var(--fg);
+		background: var(--bg);
+		border: 1px solid var(--border);
+		border-radius: 0.5rem;
+		resize: vertical;
+		font-weight: 400;
 	}
 
 	.every {

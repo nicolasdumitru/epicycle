@@ -18,4 +18,8 @@ nextPayment: string,
  * ISO date the subscription started, if known. Defaults to the earlier of
  * today and the next payment.
  */
-since: string | null, };
+since: string | null, 
+/**
+ * Plain-text notes; may be empty.
+ */
+notes: string, };

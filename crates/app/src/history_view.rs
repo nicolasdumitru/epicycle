@@ -249,6 +249,7 @@ mod tests {
                 unit: Unit::Months,
                 next_payment: "2026-10-15".into(),
                 since: None,
+                notes: String::new(),
             },
             date(2026, 10, 1),
         )

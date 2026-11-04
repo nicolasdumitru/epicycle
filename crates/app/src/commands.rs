@@ -193,6 +193,9 @@ pub struct NewSubscription {
     /// ISO date the subscription started, if known. Defaults to the earlier of
     /// today and the next payment.
     pub since: Option<String>,
+    /// Plain-text notes; may be empty.
+    #[serde(default)]
+    pub notes: String,
 }
 
 /// A currency the user can choose for a new subscription.
@@ -342,7 +345,8 @@ pub fn new_subscription(form: &NewSubscription, today: Date) -> Result<Subscript
         currency,
         start,
         plan,
-    )?;
+    )?
+    .with_notes(&form.notes);
     // The next payment is the next one: nothing is due between now and then
     // (a free trial, or time already paid for). Earlier payments, back to the
     // start, are estimates of what was paid.
@@ -1054,6 +1058,7 @@ mod tests {
             unit,
             next_payment: next.into(),
             since: None,
+            notes: String::new(),
         }
     }
 
@@ -1178,6 +1183,14 @@ mod tests {
         let s = apply_edit(&music(), &edit).unwrap();
         let view = subscription_view(&s, date(2026, 11, 3)).unwrap();
         assert_eq!(view.next_payment.as_deref(), Some("2027-03-12"));
+    }
+
+    #[test]
+    fn notes_can_be_given_when_adding() {
+        let mut f = form("10", 1, Unit::Months, "2026-11-15");
+        f.notes = "Family plan, shared with Ana\n".into();
+        let s = new_subscription(&f, date(2026, 11, 3)).unwrap();
+        assert_eq!(s.notes(), "Family plan, shared with Ana");
     }
 
     #[test]
