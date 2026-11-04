@@ -10,9 +10,9 @@ use std::path::Path;
 
 use epicycle_core::backup::Backup;
 use epicycle_core::backup::RateChanges;
-use epicycle_core::commitment::{commitment_on, total_commitment_on};
+use epicycle_core::commitment::{commitment_on, commitment_range_on, total_commitment_on};
 use epicycle_core::history::{self, HistoryReplacement, ImportPlan, Side};
-use epicycle_core::money::{Currency, Fractional, Money};
+use epicycle_core::money::{Currency, Fractional, Money, MultiCurrency};
 use epicycle_core::recurrence::{DayOfMonth, Month, Rule, Schedule};
 use epicycle_core::subscription::{Expected, Plan, Status, Subscription, SubscriptionId};
 use jiff::civil::Date;
@@ -719,6 +719,21 @@ pub struct ConvertedTotal {
     /// Currencies with no rate at all; the totals can't be computed until one
     /// is entered.
     pub missing: Vec<String>,
+    /// Whether some amounts are estimates, so the totals are expected values.
+    pub estimated: bool,
+    /// How far the totals can vary; present when `estimated` and convertible.
+    pub range: Option<TotalRange>,
+}
+
+/// The lowest and highest the commitment can be. A missing highest total
+/// means some estimate has no upper bound ("or more").
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct TotalRange {
+    pub monthly_low: MoneyView,
+    pub monthly_high: Option<MoneyView>,
+    pub annual_low: MoneyView,
+    pub annual_high: Option<MoneyView>,
 }
 
 /// Converts the current commitment to `to` with the rates for `today`.
@@ -746,7 +761,11 @@ pub fn converted_total_of(
         annual: None,
         rates: Vec::new(),
         missing,
+        estimated: false,
+        range: None,
     };
+    let range = commitment_range_on(subscriptions, today)?;
+    view.estimated = range.estimated;
     if !view.missing.is_empty() {
         return Ok(view);
     }
@@ -756,6 +775,25 @@ pub fn converted_total_of(
     view.annual = Some(rounded(annual.amount)?);
     // Both totals use the same rates; list each once.
     view.rates = monthly.rates.iter().map(|r| rate_view(r, today)).collect();
+    if range.estimated {
+        let convert = |total: &MultiCurrency| -> Result<MoneyView, CommandError> {
+            rounded(fx::convert_total(rates, total, to, today)?.amount)
+        };
+        view.range = Some(TotalRange {
+            monthly_low: convert(&range.low.monthly)?,
+            annual_low: convert(&range.low.annual)?,
+            monthly_high: range
+                .high
+                .as_ref()
+                .map(|h| convert(&h.monthly))
+                .transpose()?,
+            annual_high: range
+                .high
+                .as_ref()
+                .map(|h| convert(&h.annual))
+                .transpose()?,
+        });
+    }
     Ok(view)
 }
 
@@ -1469,6 +1507,33 @@ mod tests {
         let total = converted_total_of(&subs, &rates, usd, eur, today).unwrap();
         assert_eq!(total.monthly.unwrap().amount, "22.40");
         assert_eq!(total.default_currency, "EUR");
+    }
+
+    #[test]
+    fn totals_show_the_range_of_estimated_amounts() {
+        let today = date(2026, 11, 3);
+        let mut varying = form("", 1, Unit::Months, "2026-11-15");
+        varying.estimate = Some(EstimateInput {
+            low: "40".into(),
+            high: "60".into(),
+            expected: ExpectedChoice::Midpoint,
+        });
+        let subs = [
+            priced("A", "10", "EUR"),
+            new_subscription(&varying, today).unwrap(),
+        ];
+        let eur = Currency::EUR;
+        let total = converted_total_of(&subs, &RateTable::new([]), eur, eur, today).unwrap();
+        assert!(total.estimated);
+        assert_eq!(total.monthly.unwrap().amount, "60.00");
+        let range = total.range.unwrap();
+        assert_eq!(range.monthly_low.amount, "50.00");
+        assert_eq!(range.monthly_high.unwrap().amount, "70.00");
+        assert_eq!(range.annual_low.amount, "600.00");
+
+        let exact = converted_total_of(&subs[..1], &RateTable::new([]), eur, eur, today).unwrap();
+        assert!(!exact.estimated);
+        assert_eq!(exact.range, None);
     }
 
     #[test]

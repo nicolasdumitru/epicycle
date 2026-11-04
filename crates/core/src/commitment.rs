@@ -90,6 +90,56 @@ pub fn total_commitment_on<'a>(
         })
 }
 
+/// How far the commitment can vary when some amounts are estimates.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CommitmentRange {
+    /// With every amount at its lowest (a missing lower bound counts as 0).
+    pub low: CommitmentTotals,
+    /// With every amount at its highest; `None` when some estimate has no
+    /// upper bound, so there is no highest total.
+    pub high: Option<CommitmentTotals>,
+    /// Whether any active subscription's amount is an estimate.
+    pub estimated: bool,
+}
+
+/// The range of the commitment of the subscriptions active on `date`.
+pub fn commitment_range_on<'a>(
+    subscriptions: impl IntoIterator<Item = &'a Subscription>,
+    date: Date,
+) -> Result<CommitmentRange, MoneyError> {
+    let mut range = CommitmentRange {
+        high: Some(CommitmentTotals::default()),
+        ..CommitmentRange::default()
+    };
+    for s in subscriptions {
+        if s.status_on(date) != Some(Status::Active) {
+            continue;
+        }
+        let Some(plan) = s.plan_on(date) else {
+            continue;
+        };
+        range.estimated |= plan.estimate.is_some();
+        let (low, high) = plan.range();
+        let at = |amount: i64| {
+            let exact = Plan::exact(plan.schedule, amount);
+            Commitment::of_plan(&exact, s.currency())
+        };
+        range.low = add(range.low, at(low)?)?;
+        range.high = match (range.high, high) {
+            (Some(total), Some(h)) => Some(add(total, at(h)?)?),
+            _ => None,
+        };
+    }
+    Ok(range)
+}
+
+fn add(totals: CommitmentTotals, c: Commitment) -> Result<CommitmentTotals, MoneyError> {
+    Ok(CommitmentTotals {
+        monthly: totals.monthly.checked_add(c.monthly)?,
+        annual: totals.annual.checked_add(c.annual)?,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -233,5 +283,59 @@ mod tests {
         assert_eq!(totals.monthly.get(Currency::EUR).minor, dec!(2000));
         assert_eq!(totals.annual.get(Currency::EUR).minor, dec!(24000));
         assert_eq!(totals.monthly.get(usd).minor, dec!(500));
+    }
+
+    #[test]
+    fn ranges_cover_estimated_amounts() {
+        use crate::subscription::{Expected, SubscriptionId};
+        let monthly = |amount| {
+            plan(
+                Rule::Months {
+                    every: NonZeroU16::MIN,
+                    day: DayOfMonth::new(1).unwrap(),
+                },
+                amount,
+            )
+        };
+        let exact = Subscription::new(
+            SubscriptionId::generate(),
+            "Exact",
+            Currency::EUR,
+            date(2026, 1, 1),
+            monthly(1000),
+        )
+        .unwrap();
+        let schedule = monthly(0).schedule;
+        let between = Subscription::new(
+            SubscriptionId::generate(),
+            "Between",
+            Currency::EUR,
+            date(2026, 1, 1),
+            Plan::estimated(schedule, Some(2000), Some(4000), Expected::Midpoint, None).unwrap(),
+        )
+        .unwrap();
+        let range = commitment_range_on([&exact, &between], date(2026, 6, 1)).unwrap();
+        assert!(range.estimated);
+        assert_eq!(
+            range.low.monthly.get(Currency::EUR).minor,
+            Decimal::from(3000)
+        );
+        assert_eq!(
+            range.high.unwrap().monthly.get(Currency::EUR).minor,
+            Decimal::from(5000)
+        );
+
+        let at_least = between
+            .with_plan(
+                date(2026, 3, 1),
+                Plan::estimated(schedule, Some(2000), None, Expected::Bound, None).unwrap(),
+            )
+            .unwrap();
+        let range = commitment_range_on([&exact, &at_least], date(2026, 6, 1)).unwrap();
+        assert_eq!(range.high, None);
+
+        let range = commitment_range_on([&exact], date(2026, 6, 1)).unwrap();
+        assert!(!range.estimated);
+        assert_eq!(range.high.unwrap(), range.low);
     }
 }

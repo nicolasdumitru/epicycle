@@ -267,3 +267,9 @@ export function describePrice(s: SubscriptionView, locale: Locale): string {
 	}
 	return `${formatPrice(s.price, s.estimate, locale)} · ${describeBilling(s.billing, s.nextPayment, locale)}`;
 }
+
+/** "€50.00–€70.00", or "€50.00 or more" when there is no highest amount. */
+export function describeRange(low: MoneyView, high: MoneyView | null, locale: Locale): string {
+	const from = formatMoney(low, locale);
+	return high ? `${from}–${formatMoney(high, locale)}` : `${from} or more`;
+}

@@ -4,5 +4,7 @@ export const view = $state({
 	/** The currency totals and the chart are shown in; empty until loaded. */
 	currency: '',
 	/** Goes up when exchange rates or the default currency change. */
-	ratesVersion: 0
+	ratesVersion: 0,
+	/** Whether the totals also show how far estimated amounts can vary. */
+	showRange: false
 });
