@@ -164,6 +164,31 @@ describe('describeChange', () => {
 		expect(describeChange({ kind: 'status_set', from: '2027-01-01', status: 'paused' }, en)).toBe(
 			'Paused from 1 Jan 2027'
 		);
+		expect(
+			describeChange(
+				{
+					kind: 'payment_changed',
+					billed: '2026-11-15',
+					amount: { amount: '12.40', currency: 'EUR' },
+					due: { kind: 'on', date: '2026-11-18' }
+				},
+				en
+			)
+		).toBe('Payment billed 15 Nov 2026: €12.40, paid 18 Nov 2026');
+		expect(
+			describeChange(
+				{
+					kind: 'payment_changed',
+					billed: '2026-11-15',
+					amount: { amount: '0.00', currency: 'EUR' },
+					due: { kind: 'removed' }
+				},
+				en
+			)
+		).toBe('Payment billed 15 Nov 2026: €0.00, skipped, removed');
+		expect(describeChange({ kind: 'payment_reset', billed: '2026-11-15' }, en)).toBe(
+			'Payment billed 15 Nov 2026: back as scheduled'
+		);
 	});
 });
 

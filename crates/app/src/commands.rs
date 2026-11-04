@@ -14,7 +14,9 @@ use epicycle_core::commitment::{commitment_on, commitment_range_on, total_commit
 use epicycle_core::history::{self, HistoryReplacement, ImportPlan, Side};
 use epicycle_core::money::{Currency, Fractional, Money, MultiCurrency};
 use epicycle_core::recurrence::{DayOfMonth, Due, Month, Rule, Schedule};
-use epicycle_core::subscription::{Expected, Plan, Status, Subscription, SubscriptionId};
+use epicycle_core::subscription::{
+    AdjustedDue, Adjustment, Expected, Plan, Status, Subscription, SubscriptionId,
+};
 use jiff::civil::Date;
 use serde::{Deserialize, Serialize, Serializer};
 use tauri::State;
@@ -272,6 +274,65 @@ pub struct SubscriptionDetail {
     pub plans: Vec<PlanView>,
     /// Oldest first. Before the first change the subscription is active.
     pub status_changes: Vec<StatusChangeView>,
+    /// Payments from three months back to six months ahead, by due date, and
+    /// any removed in that time, so they can be changed or restored.
+    pub payments: Vec<PaymentView>,
+}
+
+/// One payment of a subscription, as the subscription's screen lists it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct PaymentView {
+    /// The scheduled billing date, which identifies the payment.
+    pub billed: String,
+    /// When it's due, or was due when removed.
+    pub date: String,
+    pub amount: MoneyView,
+    /// Changed from what the plan says.
+    pub adjusted: bool,
+    /// Removed: a skipped payment of 0 with no due date.
+    pub removed: bool,
+}
+
+/// Months of payments the subscription's screen lists before and after today.
+const PAYMENTS_BEFORE_MONTHS: i32 = 3;
+const PAYMENTS_AFTER_MONTHS: i32 = 6;
+
+fn payments_view(s: &Subscription, today: Date) -> Vec<PaymentView> {
+    let from = today
+        .checked_sub(jiff::Span::new().months(PAYMENTS_BEFORE_MONTHS))
+        .unwrap_or(Date::MIN);
+    let to = today
+        .checked_add(jiff::Span::new().months(PAYMENTS_AFTER_MONTHS))
+        .unwrap_or(Date::MAX);
+    let mut views: Vec<PaymentView> = s
+        .payments_between(from, to)
+        .map(|p| PaymentView {
+            billed: p.billed.to_string(),
+            date: p.date.to_string(),
+            amount: p.amount.into(),
+            adjusted: p.adjusted,
+            removed: false,
+        })
+        .collect();
+    // Removed payments don't appear among payments; list them where their
+    // bill was, so they can be restored.
+    views.extend(
+        s.adjustments()
+            .iter()
+            .filter(|a| a.due == AdjustedDue::Removed && from <= a.billed && a.billed < to)
+            .map(|a| PaymentView {
+                billed: a.billed.to_string(),
+                date: a.billed.to_string(),
+                amount: Money::new(0, s.currency()).into(),
+                adjusted: true,
+                removed: true,
+            }),
+    );
+    // ISO dates sort as text.
+    views.sort_by(|a, b| a.date.cmp(&b.date).then(a.billed.cmp(&b.billed)));
+    views
 }
 
 /// Everything the main screen shows.
@@ -592,6 +653,17 @@ pub enum Edit {
     },
     /// Pause, cancel or resume from a date on.
     Status { from: String, status: StatusChoice },
+    /// Change one payment, identified by its scheduled billing date: what was
+    /// actually paid (empty keeps the plan's amount) and when (empty keeps the
+    /// due date), or remove it, which only a payment of 0 can be.
+    Payment {
+        billed: String,
+        amount: String,
+        date: String,
+        removed: bool,
+    },
+    /// Undo the change to one payment, so it's paid as scheduled again.
+    ResetPayment { billed: String },
 }
 
 /// Applies an edit, validating it. The result is a new value; nothing is saved.
@@ -627,6 +699,41 @@ pub fn apply_edit(s: &Subscription, edit: &Edit) -> Result<Subscription, Command
         Edit::Status { from, status } => {
             let from = parse_date(from, "Effective date")?;
             Ok(s.with_status(from, (*status).into())?)
+        }
+        Edit::Payment {
+            billed,
+            amount,
+            date,
+            removed,
+        } => {
+            let billed = parse_date(billed, "Billing date")?;
+            let amount = match amount.trim() {
+                "" => None,
+                text => Some(Money::parse_major(text, s.currency())?.minor),
+            };
+            let due = if *removed {
+                if amount != Some(0) {
+                    return Err(CommandError(
+                        "Only a payment of 0 can be removed: set its amount to 0 first".into(),
+                    ));
+                }
+                AdjustedDue::Removed
+            } else {
+                match date.trim() {
+                    "" => AdjustedDue::Scheduled,
+                    text => AdjustedDue::On {
+                        date: parse_date(text, "Date paid")?,
+                    },
+                }
+            };
+            Ok(s.with_adjustment(Adjustment {
+                billed,
+                amount,
+                due,
+            })?)
+        }
+        Edit::ResetPayment { billed } => {
+            Ok(s.without_adjustment(parse_date(billed, "Billing date")?))
         }
     }
 }
@@ -689,6 +796,7 @@ pub fn detail_of(s: &Subscription, today: Date) -> Result<SubscriptionDetail, Co
                 status: c.value.into(),
             })
             .collect(),
+        payments: payments_view(s, today),
     })
 }
 
@@ -1440,6 +1548,63 @@ mod tests {
         assert_eq!(detail.subscription.price.amount, "25.00");
         assert!(detail.plans[0].estimate.is_none());
         assert!(detail.plans[1].estimate.is_some());
+    }
+
+    #[test]
+    fn single_payments_can_be_changed_and_restored() {
+        let today = date(2026, 11, 3);
+        let s = music();
+        let change = |amount: &str, date: &str, removed| Edit::Payment {
+            billed: "2026-11-15".into(),
+            amount: amount.into(),
+            date: date.into(),
+            removed,
+        };
+        let higher = apply_edit(&s, &change("12.40", "2026-11-18", false)).unwrap();
+        let detail = detail_of(&higher, today).unwrap();
+        let nov = detail
+            .payments
+            .iter()
+            .find(|p| p.billed == "2026-11-15")
+            .unwrap();
+        assert_eq!(
+            (nov.date.as_str(), nov.amount.amount.as_str(), nov.adjusted),
+            ("2026-11-18", "12.40", true)
+        );
+
+        let error = apply_edit(&s, &change("", "", true)).unwrap_err().0;
+        assert!(error.contains("Only a payment of 0"), "{error}");
+        let removed = apply_edit(&s, &change("0", "", true)).unwrap();
+        let detail = detail_of(&removed, today).unwrap();
+        let nov = detail
+            .payments
+            .iter()
+            .find(|p| p.billed == "2026-11-15")
+            .unwrap();
+        assert!(nov.removed);
+        // Removed, the next payment is December's.
+        assert_eq!(
+            detail.subscription.next_payment.as_deref(),
+            Some("2026-12-15")
+        );
+
+        let reset = Edit::ResetPayment {
+            billed: "2026-11-15".into(),
+        };
+        let restored = apply_edit(&removed, &reset).unwrap();
+        assert_eq!(restored, s);
+        let error = apply_edit(
+            &s,
+            &Edit::Payment {
+                billed: "2026-11-16".into(),
+                amount: "5".into(),
+                date: String::new(),
+                removed: false,
+            },
+        )
+        .unwrap_err()
+        .0;
+        assert!(error.contains("no payment is billed"), "{error}");
     }
 
     #[test]
