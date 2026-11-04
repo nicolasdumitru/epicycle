@@ -15,7 +15,8 @@
 	import type { ConvertedTotal } from '#lib/bindings/ConvertedTotal.ts';
 	import type { CurrencyOption } from '#lib/bindings/CurrencyOption.ts';
 	import type { MoneyView } from '#lib/bindings/MoneyView.ts';
-	import { describeRateSource, formatMoney, formatRate } from '#lib/format.ts';
+	import { describeRange, describeRateSource, formatMoney, formatRate } from '#lib/format.ts';
+	import { view } from '#lib/view.svelte.ts';
 	import CurrencyInput from './CurrencyInput.svelte';
 	import FavoriteChips from './FavoriteChips.svelte';
 
@@ -133,13 +134,44 @@
 			<div class="stats">
 				<div>
 					<h3>Per month</h3>
-					<p class="value">{total.monthly ? formatMoney(total.monthly, locale) : '–'}</p>
+					<p class="value">
+						{total.estimated ? '≈ ' : ''}{total.monthly ? formatMoney(total.monthly, locale) : '–'}
+					</p>
+					{#if view.showRange && total.range}
+						<p class="range">
+							{describeRange(total.range.monthlyLow, total.range.monthlyHigh, locale)}
+						</p>
+					{/if}
 				</div>
 				<div>
 					<h3>Per year</h3>
-					<p class="value">{total.annual ? formatMoney(total.annual, locale) : '–'}</p>
+					<p class="value">
+						{total.estimated ? '≈ ' : ''}{total.annual ? formatMoney(total.annual, locale) : '–'}
+					</p>
+					{#if view.showRange && total.range}
+						<p class="range">
+							{describeRange(total.range.annualLow, total.range.annualHigh, locale)}
+						</p>
+					{/if}
 				</div>
 			</div>
+			{#if total.estimated && total.range}
+				<div class="estimate">
+					<p class="muted">
+						{view.showRange
+							? 'Includes estimates: the range is from the lowest to the highest amounts.'
+							: 'Includes estimates: some amounts vary.'}
+					</p>
+					<button
+						type="button"
+						class="secondary small"
+						aria-pressed={view.showRange}
+						onclick={() => (view.showRange = !view.showRange)}
+					>
+						{view.showRange ? 'Hide range' : 'Show range'}
+					</button>
+				</div>
+			{/if}
 		{/if}
 
 		{#if others.length > 0}
@@ -251,6 +283,26 @@
 
 	p {
 		margin: 0;
+	}
+
+	.range {
+		margin-top: 0.125rem;
+		color: var(--muted);
+		font-variant-numeric: tabular-nums;
+	}
+
+	.estimate {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem 1rem;
+	}
+
+	.small {
+		min-height: 36px;
+		padding: 0 0.875rem;
+		font-size: 0.875rem;
 	}
 
 	.value {

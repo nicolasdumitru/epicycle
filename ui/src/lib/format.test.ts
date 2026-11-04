@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	backupFileName,
+	describeRange,
 	describePrice,
 	describeRateSource,
 	formatRate,
@@ -239,5 +240,14 @@ describe('describePrice', () => {
 		expect(describePrice(trial, en)).toBe(
 			'Free until 12 Mar 2027, then €20.00 · monthly on the 12th'
 		);
+	});
+});
+
+describe('describeRange', () => {
+	const eur = (amount: string) => ({ amount, currency: 'EUR' });
+
+	it('shows both ends, or an open end', () => {
+		expect(describeRange(eur('50.00'), eur('70.00'), en)).toBe('€50.00–€70.00');
+		expect(describeRange(eur('50.00'), null, en)).toBe('€50.00 or more');
 	});
 });
