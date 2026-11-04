@@ -28,10 +28,14 @@ serde_json = "1.0.154"
 sqlx = { version = "0.9.0", default-features = false, features = ["runtime-tokio", "sqlite-bundled", "macros", "migrate"] }
 tauri = { version = "2.12.3", features = [] }
 tauri-plugin-dialog = "2.8.3"
+# Scheduled reminders on Android (and later iOS); see docs/DECISIONS.md.
+tauri-plugin-notification = "2.8.0"
+# The notification plugin takes its scheduled times in this crate's type.
+time = { version = "0.3.55", default-features = false }
 thiserror = "2.0.21"
 # Timers for refreshing exchange rates in the background, and waiting for the
 # database at start-up; Tauri runs on tokio.
-tokio = { version = "1.54.1", features = ["sync", "time"] }
+tokio = { version = "1.54.1", features = ["macros", "sync", "time"] }
 ts-rs = "12"
 uuid = { version = "1.29.0", features = ["v7"] }
 

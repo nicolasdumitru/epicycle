@@ -1211,12 +1211,14 @@ pub fn currencies() -> Vec<CurrencyOption> {
 
 #[tauri::command]
 pub async fn add_subscription(
+    app: tauri::AppHandle,
     db: State<'_, DbHandle>,
     form: NewSubscription,
 ) -> Result<Overview, CommandError> {
     let db = db.ready().await;
     let today = today();
     db.save(&new_subscription(&form, today)?).await?;
+    crate::notifications::changed(&app);
     overview_of(&db.subscriptions().await?, today)
 }
 
@@ -1240,6 +1242,7 @@ pub async fn subscription(
 
 #[tauri::command]
 pub async fn edit_subscription(
+    app: tauri::AppHandle,
     db: State<'_, DbHandle>,
     id: String,
     edit: Edit,
@@ -1247,17 +1250,20 @@ pub async fn edit_subscription(
     let db = db.ready().await;
     let edited = apply_edit(&find(db, &id).await?, &edit)?;
     db.save(&edited).await?;
+    crate::notifications::changed(&app);
     detail_of(&edited, today())
 }
 
 #[tauri::command]
 pub async fn delete_subscription(
+    app: tauri::AppHandle,
     db: State<'_, DbHandle>,
     id: String,
 ) -> Result<Overview, CommandError> {
     let db = db.ready().await;
     let id = SubscriptionId(Uuid::parse_str(&id)?);
     db.delete(id).await?;
+    crate::notifications::changed(&app);
     overview_of(&db.subscriptions().await?, today())
 }
 
@@ -1315,6 +1321,7 @@ fn history_mode(mode: ImportMode) -> history::ImportMode {
 
 #[tauri::command]
 pub async fn import_backup(
+    app: tauri::AppHandle,
     db: State<'_, DbHandle>,
     path: String,
     mode: ImportMode,
@@ -1331,6 +1338,8 @@ pub async fn import_backup(
             with_rates(replacement_summary(&plan), &rates)
         }
     };
+    // Imports can change reminder settings as well as subscriptions.
+    crate::notifications::changed(&app);
     Ok(Imported {
         summary,
         overview: overview_of(&db.subscriptions().await?, today())?,
@@ -1357,6 +1366,7 @@ pub async fn subscription_history(
 /// Makes an earlier version of a subscription current again.
 #[tauri::command]
 pub async fn restore_revision(
+    app: tauri::AppHandle,
     db: State<'_, DbHandle>,
     id: String,
     revision: String,
@@ -1368,6 +1378,7 @@ pub async fn restore_revision(
             parse_id(&revision, RevisionId)?,
         )
         .await?;
+    crate::notifications::changed(&app);
     detail_of(&restored, today())
 }
 
