@@ -118,7 +118,7 @@
 		busy = true;
 		try {
 			await deleteSubscription(id);
-			await goto('/');
+			await goto('/subscriptions');
 		} catch (e) {
 			error = String(e);
 			busy = false;
@@ -139,7 +139,7 @@
 
 <main>
 	<nav>
-		<a href="/" class="back">‹ Subscriptions</a>
+		<a href="/subscriptions" class="back">‹ Subscriptions</a>
 	</nav>
 
 	{#if error}

@@ -33,7 +33,7 @@
 
 <main>
 	<nav>
-		<a href="/" class="back">‹ Subscriptions</a>
+		<a href="/subscriptions" class="back">‹ Subscriptions</a>
 	</nav>
 	<h1>Deleted subscriptions</h1>
 	<p class="muted">
