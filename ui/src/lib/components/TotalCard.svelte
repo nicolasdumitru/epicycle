@@ -95,6 +95,11 @@
 		}
 	}
 
+	const commitment = $derived(view.period === 'month' ? total?.monthly : total?.annual);
+	const payments = $derived(view.period === 'month' ? total?.thisMonth : total?.thisYear);
+	const monthName = new Intl.DateTimeFormat(locale, { month: 'long' }).format(new Date());
+	const yearName = String(new Date().getFullYear());
+
 	const stale = $derived(total?.rates.filter((r) => r.freshness === 'stale') ?? []);
 	// Worth showing only when something was actually converted.
 	const others = $derived(monthlyByCurrency.filter((m) => m.currency !== total?.currency));
@@ -131,26 +136,43 @@
 				<a href="/rates">Enter a rate</a>
 			</p>
 		{:else}
+			<div class="period" role="group" aria-label="Show totals for">
+				<button
+					type="button"
+					aria-pressed={view.period === 'month'}
+					onclick={() => (view.period = 'month')}>Month</button
+				>
+				<button
+					type="button"
+					aria-pressed={view.period === 'year'}
+					onclick={() => (view.period = 'year')}>Year</button
+				>
+			</div>
 			<div class="stats">
 				<div>
-					<h3>Per month</h3>
+					<h3>{view.period === 'month' ? 'Per month' : 'Per year'}</h3>
 					<p class="value">
-						{total.estimated ? '≈ ' : ''}{total.monthly ? formatMoney(total.monthly, locale) : '–'}
+						{total.estimated ? '≈ ' : ''}{commitment ? formatMoney(commitment, locale) : '–'}
 					</p>
 					{#if view.showRange && total.range}
 						<p class="range">
-							{describeRange(total.range.monthlyLow, total.range.monthlyHigh, locale)}
+							{view.period === 'month'
+								? describeRange(total.range.monthlyLow, total.range.monthlyHigh, locale)
+								: describeRange(total.range.annualLow, total.range.annualHigh, locale)}
 						</p>
 					{/if}
+					<p class="caption">On average, at current prices</p>
 				</div>
 				<div>
-					<h3>Per year</h3>
+					<h3>Left to pay</h3>
 					<p class="value">
-						{total.estimated ? '≈ ' : ''}{total.annual ? formatMoney(total.annual, locale) : '–'}
+						{total.estimated ? '≈ ' : ''}{payments ? formatMoney(payments.left, locale) : '–'}
 					</p>
-					{#if view.showRange && total.range}
-						<p class="range">
-							{describeRange(total.range.annualLow, total.range.annualHigh, locale)}
+					{#if payments}
+						<p class="caption">
+							of {formatMoney(payments.total, locale)} due in {view.period === 'month'
+								? monthName
+								: yearName}
 						</p>
 					{/if}
 				</div>
@@ -283,6 +305,39 @@
 
 	p {
 		margin: 0;
+	}
+
+	/* A two-way switch: Month or Year. */
+	.period {
+		display: inline-flex;
+		justify-self: start;
+		padding: 0.1875rem;
+		gap: 0.1875rem;
+		background: var(--bg);
+		border: 1px solid var(--border);
+		border-radius: 999px;
+	}
+
+	.period button {
+		min-height: 36px;
+		padding: 0 1rem;
+		border: 0;
+		border-radius: 999px;
+		background: transparent;
+		color: var(--muted);
+		font-size: 0.875rem;
+	}
+
+	.period button[aria-pressed='true'] {
+		background: var(--surface);
+		color: var(--fg);
+		box-shadow: 0 1px 3px rgb(0 0 0 / 0.15);
+	}
+
+	.caption {
+		margin-top: 0.125rem;
+		color: var(--muted);
+		font-size: 0.875rem;
 	}
 
 	.range {
