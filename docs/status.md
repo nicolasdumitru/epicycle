@@ -150,8 +150,9 @@ Agreed order for the rest of milestone 1 (2026-11-03):
    installers (unsigned, so SmartScreen warns). The user will test them on a
    Windows PC. A likely snag is building the TLS library (`aws-lc-rs`).
 10. **Releases** (2026-11-04): pushing a version tag publishes a GitHub Release
-    with the signed Android APK and the Windows installers. First release:
-    v0.1.0.
+    with the signed Android APK and the Windows installers. Releases: v0.1.0;
+    v0.2.0 (2026-11-04: tabs, notes when adding, estimated amounts and
+    ranges, due dates, single-payment changes, what's left to pay).
 7. ~~Nix package~~ (done): `nix run github:nicolasdumitru/epicycle`, or in the
    system configuration (see the README). CI builds it.
 

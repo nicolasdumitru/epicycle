@@ -17,7 +17,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2.7.2", features = [] }
 
 [dependencies]
-epicycle-core = { version = "0.1.0", path = "../core" }
+epicycle-core = { version = "0.2.0", path = "../core" }
 jiff = "0.2.38"
 # HTTPS for ECB exchange rates. rustls checks certificates against each
 # platform's own trust store, which matters on iOS and Android.
