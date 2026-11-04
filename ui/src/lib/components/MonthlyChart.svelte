@@ -1,5 +1,5 @@
 <script lang="ts">
-	// Month by month: what is paid (columns: scheduled cash flow) and the
+	// Month by month: the payments in each month (columns: scheduled cash flow) and the
 	// monthly equivalent of what is active (line: commitment), on one axis in
 	// one currency. Kept visibly apart, as the spec asks: an annual plan is one
 	// tall column but a flat line. Months before this one are estimates.
@@ -106,10 +106,10 @@
 	}
 
 	function describe(m: MonthView): string {
-		const paid = formatMoney(m.cashFlow, locale);
+		const payments = formatMoney(m.cashFlow, locale);
 		const rate = formatMoney(m.commitment, locale);
-		const kind = m.estimated ? 'estimated' : 'scheduled';
-		return `${monthName(m)}: ${paid} paid (${kind}); ${rate} monthly equivalent`;
+		const what = m.estimated ? 'paid (estimated)' : 'due (scheduled)';
+		return `${monthName(m)}: ${payments} ${what}; ${rate} monthly equivalent`;
 	}
 
 	const activeMonth = $derived(active === null ? undefined : months[active]);
@@ -137,7 +137,7 @@
 	{:else if chart}
 		<div class="card">
 			<ul class="legend" aria-label="Legend">
-				<li><span class="swatch bar" aria-hidden="true"></span>Paid in the month</li>
+				<li><span class="swatch bar" aria-hidden="true"></span>Payments in the month</li>
 				<li><span class="swatch line" aria-hidden="true"></span>Monthly equivalent</li>
 			</ul>
 
@@ -210,7 +210,8 @@
 					<div class="tooltip" style:left="{tooltipLeft}px" aria-hidden="true">
 						<p class="title">{monthName(m)}</p>
 						<p>
-							<span class="swatch bar"></span>{formatMoney(m.cashFlow, locale)} paid
+							<span class="swatch bar"></span>{formatMoney(m.cashFlow, locale)}
+							{m.estimated ? 'paid' : 'due'}
 							<span class="muted">({m.estimated ? 'estimated' : 'scheduled'})</span>
 						</p>
 						<p><span class="swatch line"></span>{formatMoney(m.commitment, locale)} monthly equivalent</p>
@@ -219,9 +220,10 @@
 			</div>
 
 			<p class="note">
-				Columns are what is paid in each month: a yearly plan is one tall column. The line is the
-				monthly equivalent of what is active, which only changes when subscriptions do. Past months
-				are estimated from your plans, not from your bank.
+				Columns are the payments in each month: for past months, what was paid, estimated from your
+				plans rather than your bank; for the months ahead, what will be due, of which nothing is paid
+				yet. A yearly plan is one tall column. The line is the monthly equivalent of what is active,
+				which only changes when subscriptions do.
 			</p>
 
 			<details>
@@ -230,14 +232,14 @@
 					<thead>
 						<tr>
 							<th scope="col">Month</th>
-							<th scope="col">Paid</th>
+							<th scope="col">Payments</th>
 							<th scope="col">Monthly equivalent</th>
 						</tr>
 					</thead>
 					<tbody>
 						{#each months as m (m.month)}
 							<tr>
-								<th scope="row">{monthName(m)}{m.estimated ? ' (estimated)' : ''}</th>
+								<th scope="row">{monthName(m)} ({m.estimated ? 'paid, estimated' : 'scheduled'})</th>
 								<td>{formatMoney(m.cashFlow, locale)}</td>
 								<td>{formatMoney(m.commitment, locale)}</td>
 							</tr>
