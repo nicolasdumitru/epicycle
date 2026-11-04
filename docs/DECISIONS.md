@@ -204,6 +204,28 @@ the snapshot and backup format versions go up, and old files keep reading.
   later the source for estimates from past payments. A payment of 0 keeps its
   due date unless the user removes the payment entirely, which is optional.
 
+### Reminders (agreed 2026-11-04)
+
+- **What:** a payment due; a free trial ending; a bill, when it's billed on a
+  different day from when it's due; a price change taking effect.
+- **When:** one list of lead times for all subscriptions, by default a single
+  reminder 1 day ahead, at a time of day (default 09:00, local). More lead
+  times can be added (e.g. 3 days and 1 day). Per-subscription settings may
+  come later.
+- **How:** the core computes the coming reminders from the subscriptions and
+  the settings, as a pure function. The app keeps the platform's schedule in
+  step with it: at start-up and after every change it cancels the reminders
+  it scheduled and schedules the coming ones (60 days ahead, at most 60), each
+  with an ID derived from what it's about, so rescheduling never duplicates.
+- **Android first**, with the official notification plugin: it restores
+  scheduled notifications after a reboot, fires while the phone dozes, and
+  without exact-alarm permission falls back to inexact alarms (possibly some
+  minutes late, fine for reminders; no special permission needed). Desktop
+  shows notifications only immediately, so it gets no scheduled reminders
+  yet; iOS follows when it can be tested.
+- **Settings** are with the others: in the database and in backups (format
+  version 5).
+
 ### Exchange rates
 - **Rates are stored the way the ECB publishes them:** units of a currency per
   1 EUR, with the date the rate applies to and its source (ECB or manual). Other
