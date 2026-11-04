@@ -53,7 +53,12 @@
 						<ul>
 							{#each group.payments as p (p.subscriptionId)}
 								<li>
-									<a href="/subscriptions/{p.subscriptionId}">{p.name}</a>
+									<span class="what">
+										<a href="/subscriptions/{p.subscriptionId}">{p.name}</a>
+										{#if p.billed !== p.date}
+											<span class="billed">billed {formatDate(p.billed, locale)}</span>
+										{/if}
+									</span>
 									<span class="amount">{formatMoney(p.amount, locale)}</span>
 								</li>
 							{/each}
@@ -134,6 +139,16 @@
 
 	a:hover {
 		text-decoration: underline;
+	}
+
+	.what {
+		display: grid;
+		min-width: 0;
+	}
+
+	.billed {
+		color: var(--muted);
+		font-size: 0.8125rem;
 	}
 
 	.amount {

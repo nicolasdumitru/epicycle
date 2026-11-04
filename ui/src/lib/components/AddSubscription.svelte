@@ -7,7 +7,9 @@
 	import { billingUnits as units } from '#lib/format.ts';
 	import type { EstimateInput } from '#lib/bindings/EstimateInput.ts';
 	import AmountInput from './AmountInput.svelte';
+	import type { DueChoice } from '#lib/bindings/DueChoice.ts';
 	import CurrencyInput from './CurrencyInput.svelte';
+	import DueInput from './DueInput.svelte';
 	import DateInput from './DateInput.svelte';
 	import FavoriteChips from './FavoriteChips.svelte';
 
@@ -20,6 +22,7 @@
 	let name = $state('');
 	let amount = $state('');
 	let estimate = $state<EstimateInput | null>(null);
+	let due = $state<DueChoice>({ kind: 'on_billing' });
 	let currency = $state('EUR');
 	let every = $state(1);
 	let unit = $state<Unit>('months');
@@ -53,7 +56,7 @@
 				name,
 				amount,
 				estimate,
-				due: { kind: 'on_billing' },
+				due,
 				currency,
 				every,
 				unit,
@@ -111,9 +114,11 @@
 		</div>
 	</fieldset>
 
+	<DueInput bind:due />
+
 	<DateInput
 		bind:value={nextPayment}
-		label="Next payment"
+		label={due.kind === 'on_billing' ? 'Next payment' : 'Next bill'}
 		hint="Nothing is due before it, e.g. during a free trial. Monthly and yearly billing repeat on this day."
 		required
 		{today}

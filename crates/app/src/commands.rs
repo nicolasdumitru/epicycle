@@ -132,6 +132,8 @@ pub struct SubscriptionView {
     pub next_change: Option<PlanView>,
     /// Set when the current price is an estimate.
     pub estimate: Option<EstimateView>,
+    /// When the current plan's payments are due after their bill.
+    pub due: DueChoice,
 }
 
 /// How an estimate's expected amount is chosen (see `Expected` in the core).
@@ -248,6 +250,8 @@ pub struct PlanView {
     pub anchor: String,
     /// Set when the price is an estimate.
     pub estimate: Option<EstimateView>,
+    /// When payments are due after their bill.
+    pub due: DueChoice,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -648,6 +652,7 @@ fn subscription_view(s: &Subscription, today: Date) -> Result<SubscriptionView, 
         start: s.start().to_string(),
         notes: s.notes().to_owned(),
         estimate: estimate_view(s.currency(), plan),
+        due: plan.due.into(),
         next_change: s
             .plans()
             .iter()
@@ -663,6 +668,7 @@ fn plan_view(currency: Currency, p: &epicycle_core::subscription::Dated<Plan>) -
         billing: p.value.schedule.rule().into(),
         anchor: p.value.schedule.anchor().to_string(),
         estimate: estimate_view(currency, &p.value),
+        due: p.value.due.into(),
     }
 }
 
