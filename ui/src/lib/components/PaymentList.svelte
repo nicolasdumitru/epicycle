@@ -28,7 +28,14 @@
 		null
 	);
 
-	const isZero = $derived(editing !== null && Number(editing.amount.replace(',', '.')) === 0);
+	// An empty amount counts as nothing paid, so the remove option appears as
+	// soon as the amount is cleared.
+	const isZero = $derived(
+		editing !== null &&
+			(editing.amount.trim() === '' || Number(editing.amount.replace(',', '.')) === 0)
+	);
+	// Removing means nothing was paid: the amount is 0 without typing it.
+	const removing = $derived(editing !== null && editing.removed && isZero);
 
 	function open(payment: PaymentView) {
 		editing = { payment, amount: payment.amount.amount, date: payment.date, removed: payment.removed };
@@ -42,13 +49,17 @@
 		// price change still applies to the rest. A changed one is replaced
 		// whole, so keep its values.
 		const keepAll = payment.adjusted;
-		const done = await onEdit({
-			kind: 'payment',
-			billed: payment.billed,
-			amount: keepAll || amount !== payment.amount.amount ? amount : '',
-			date: keepAll || date !== payment.date ? date : '',
-			removed: removed && isZero
-		});
+		const done = await onEdit(
+			removing
+				? { kind: 'payment', billed: payment.billed, amount: '0', date: '', removed: true }
+				: {
+						kind: 'payment',
+						billed: payment.billed,
+						amount: keepAll || amount !== payment.amount.amount ? amount : '',
+						date: keepAll || date !== payment.date ? date : '',
+						removed: false
+					}
+		);
 		if (done) editing = null;
 	}
 </script>
@@ -83,18 +94,26 @@
 
 				{#if editing?.payment.billed === payment.billed}
 					<form class="change" onsubmit={save}>
-						<label>
-							Amount paid ({payment.amount.currency})
-							<input bind:value={editing.amount} required inputmode="decimal" autocomplete="off" />
-						</label>
-						{#if !(isZero && editing.removed)}
-							<DateInput bind:value={editing.date} label="Paid on" required {today} />
+						{#if !removing}
+							<label>
+								Amount ({payment.amount.currency})
+								<input bind:value={editing.amount} required inputmode="decimal" autocomplete="off" />
+							</label>
+							<DateInput
+								bind:value={editing.date}
+								label={editing.date < today ? 'Paid on' : 'Due on'}
+								required
+								{today}
+							/>
 						{/if}
 						{#if isZero}
 							<label class="check">
 								<input type="checkbox" bind:checked={editing.removed} />
-								<span>Remove this payment (a skipped payment of 0 otherwise keeps its date)</span>
+								<span>Remove this payment (otherwise a payment of 0 keeps its date)</span>
 							</label>
+						{/if}
+						{#if removing}
+							<p class="muted">Nothing paid: this payment won't appear or count anywhere.</p>
 						{/if}
 						<div class="actions">
 							<button type="button" class="secondary" onclick={() => (editing = null)}>Cancel</button>
