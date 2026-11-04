@@ -30,8 +30,8 @@ pub const FORMAT: &str = "epicycle-backup";
 /// - 3: adds `settings.favorite_currencies` and `manual_rates`. Older files
 ///   are read as having none of either.
 /// - 4: plans may have an `estimate` (bounds and how the expected amount is
-///   chosen) and a `due` rule. Older files have exact amounts, due when
-///   billed.
+///   chosen) and a `due` rule, and subscriptions `adjustments` to single
+///   payments. Older files have exact amounts, due when billed, unchanged.
 pub const VERSION: u64 = 4;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM payment_adjustments WHERE subscription_id = ?",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "6318b8c8016ce44181016891d851f8be3df6e61c320f0f620642cef671e328ef"
+}

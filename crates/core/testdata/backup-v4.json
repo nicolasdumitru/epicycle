@@ -155,7 +155,17 @@
           }
         ],
         "status_changes": [],
-        "notes": "Family plan, shared with two others.\nRenews through the app store."
+        "notes": "Family plan, shared with two others.\nRenews through the app store.",
+        "adjustments": [
+          {
+            "billed": "2026-05-15",
+            "amount": 1299,
+            "due": {
+              "kind": "on",
+              "date": "2026-05-22"
+            }
+          }
+        ]
       }
     },
     {
