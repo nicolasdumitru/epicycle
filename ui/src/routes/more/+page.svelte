@@ -21,7 +21,8 @@
 	main {
 		max-width: 44rem;
 		margin: 0 auto;
-		padding: 1rem;
+		/* 16px from the window's edges on phones, growing to 32px on wider windows. */
+		padding: 1rem max(1rem, min(4vw, 2rem));
 		display: grid;
 		gap: 1.25rem;
 	}
