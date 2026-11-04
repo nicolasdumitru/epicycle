@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO payment_adjustments (subscription_id, billed, amount, due_kind, due_date)\n             VALUES (?, ?, ?, ?, ?)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 5
+    },
+    "nullable": []
+  },
+  "hash": "15a22b7003c1b3060d6d568f0964fb754a82648210a5f433563811d19a1f73fc"
+}

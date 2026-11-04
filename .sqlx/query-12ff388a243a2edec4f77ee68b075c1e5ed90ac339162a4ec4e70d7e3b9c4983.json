@@ -1,0 +1,74 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT subscription_id, billed, amount, due_kind, due_date\n             FROM payment_adjustments ORDER BY subscription_id, billed",
+  "describe": {
+    "columns": [
+      {
+        "name": "subscription_id",
+        "ordinal": 0,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "payment_adjustments",
+            "name": "subscription_id"
+          }
+        }
+      },
+      {
+        "name": "billed",
+        "ordinal": 1,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "payment_adjustments",
+            "name": "billed"
+          }
+        }
+      },
+      {
+        "name": "amount",
+        "ordinal": 2,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "payment_adjustments",
+            "name": "amount"
+          }
+        }
+      },
+      {
+        "name": "due_kind",
+        "ordinal": 3,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "payment_adjustments",
+            "name": "due_kind"
+          }
+        }
+      },
+      {
+        "name": "due_date",
+        "ordinal": 4,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "payment_adjustments",
+            "name": "due_date"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "12ff388a243a2edec4f77ee68b075c1e5ed90ac339162a4ec4e70d7e3b9c4983"
+}

@@ -17,7 +17,7 @@ use epicycle_core::history::{
 use epicycle_core::money::Currency;
 use epicycle_core::recurrence::{DayOfMonth, Due, Month, Rule, Schedule};
 use epicycle_core::subscription::{
-    Dated, Estimate, Expected, Plan, Status, Subscription, SubscriptionId,
+    AdjustedDue, Adjustment, Dated, Estimate, Expected, Plan, Status, Subscription, SubscriptionId,
 };
 use jiff::Timestamp;
 use jiff::civil::Date;
@@ -34,8 +34,9 @@ use uuid::Uuid;
 /// - 1: the first format.
 /// - 2: adds `notes`, left out when empty. Version 1 snapshots read as version
 ///   2 snapshots without notes, so they need no upgrade.
-/// - 3: plans may have an `estimate` and a `due` rule, left out for exact
-///   amounts due when billed. Older snapshots read unchanged.
+/// - 3: plans may have an `estimate` and a `due` rule, and subscriptions
+///   `adjustments` to single payments; all left out when unused. Older
+///   snapshots read unchanged.
 const SNAPSHOT_VERSION: i64 = 3;
 
 #[derive(Debug, Error)]
@@ -148,6 +149,31 @@ impl Db {
         )
         .fetch_all(&self.pool)
         .await?;
+        let adjustment_rows = sqlx::query!(
+            "SELECT subscription_id, billed, amount, due_kind, due_date
+             FROM payment_adjustments ORDER BY subscription_id, billed"
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        let mut adjustments: HashMap<String, Vec<Adjustment>> = HashMap::new();
+        for row in adjustment_rows {
+            let due = match (row.due_kind.as_str(), row.due_date.as_deref()) {
+                ("scheduled", None) => AdjustedDue::Scheduled,
+                ("on", Some(date)) => AdjustedDue::On {
+                    date: parse_date(date)?,
+                },
+                ("removed", None) => AdjustedDue::Removed,
+                (kind, _) => return Err(corrupt(format_args!("bad adjusted due {kind:?}"))),
+            };
+            adjustments
+                .entry(row.subscription_id)
+                .or_default()
+                .push(Adjustment {
+                    billed: parse_date(&row.billed)?,
+                    amount: row.amount,
+                    due,
+                });
+        }
 
         let mut plans: HashMap<String, Vec<Dated<Plan>>> = HashMap::new();
         for row in plan_rows {
@@ -187,7 +213,10 @@ impl Db {
                     plans.remove(&row.id).unwrap_or_default(),
                     statuses.remove(&row.id).unwrap_or_default(),
                 )
-                .map(|s| s.with_notes(&row.notes))
+                .and_then(|s| {
+                    s.with_notes(&row.notes)
+                        .with_adjustments(adjustments.remove(&row.id).unwrap_or_default())
+                })
                 .map_err(corrupt)
             })
             .collect()
@@ -828,6 +857,32 @@ async fn write_current(
         .execute(&mut *conn)
         .await?;
     }
+
+    sqlx::query!(
+        "DELETE FROM payment_adjustments WHERE subscription_id = ?",
+        id
+    )
+    .execute(&mut *conn)
+    .await?;
+    for a in subscription.adjustments() {
+        let billed = a.billed.to_string();
+        let (kind, date) = match a.due {
+            AdjustedDue::Scheduled => ("scheduled", None),
+            AdjustedDue::On { date } => ("on", Some(date.to_string())),
+            AdjustedDue::Removed => ("removed", None),
+        };
+        sqlx::query!(
+            "INSERT INTO payment_adjustments (subscription_id, billed, amount, due_kind, due_date)
+             VALUES (?, ?, ?, ?, ?)",
+            id,
+            billed,
+            a.amount,
+            kind,
+            date
+        )
+        .execute(&mut *conn)
+        .await?;
+    }
     Ok(())
 }
 
@@ -1081,6 +1136,14 @@ mod tests {
                 .unwrap()
                 .due(Due::DaysAfter { days: 14 }),
             )
+            .unwrap()
+            .with_adjustment(Adjustment {
+                billed: date(2026, 2, 28),
+                amount: Some(1499),
+                due: AdjustedDue::On {
+                    date: date(2026, 3, 2),
+                },
+            })
             .unwrap();
         db.save(&s).await.unwrap();
         assert_eq!(db.subscriptions().await.unwrap(), std::slice::from_ref(&s));
