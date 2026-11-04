@@ -177,6 +177,33 @@ separate:
   rest of the subscription. Line endings are normalised and trailing whitespace
   dropped, so the same text always compares equal.
 
+### Estimated amounts, due dates and one-off changes (agreed 2026-11-04)
+
+Designed together; built in steps. Each changes the stored subscription, so
+the snapshot and backup format versions go up, and old files keep reading.
+
+- **Estimated amounts.** A plan's `amount` is the amount expected per payment,
+  as before; an optional `estimate` beside it says the amount isn't exact:
+  a lower bound, an upper bound or both, and how the expected amount is
+  chosen: the average of the bounds (needs both), the one bound given
+  (the default when there is only one, and the form says so), or entered by
+  hand (within the bounds). Later: estimated from past payments, falling
+  back to the average or the hand-entered amount. Everything that adds up
+  money uses the expected amount. Exact amounts store as before.
+- **Totals with estimates** show the expected total, marked as including
+  estimates, with a visible control to show the range as well: lowest to
+  highest possible. A missing lower bound counts as 0; a missing upper bound
+  leaves the range open ("or more").
+- **Due dates.** A plan bills on its schedule; the payment can be due later,
+  either a number of days after each bill or on a fixed day of the month (the
+  first such day on or after the bill). By default it's due when billed.
+  Payments, upcoming payments and monthly cash flow use the due date, when
+  money actually leaves; plans and status changes apply by billing date.
+- **One-off changes to a single payment.** For one scheduled payment, change
+  its amount, its date, or both; recorded in the history and backed up, and
+  later the source for estimates from past payments. A payment of 0 keeps its
+  due date unless the user removes the payment entirely, which is optional.
+
 ### Exchange rates
 - **Rates are stored the way the ECB publishes them:** units of a currency per
   1 EUR, with the date the rate applies to and its source (ECB or manual). Other

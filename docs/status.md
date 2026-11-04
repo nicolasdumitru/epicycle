@@ -108,11 +108,10 @@ real phone.
 - ~~Notes when adding a subscription~~ (done).
 - ~~Tabs~~ (done): Overview, Subscriptions and More, a bar at the bottom on
   phones and a row at the top on wider screens; the cards are unchanged.
-- To design first (they change the stored data and the backup format): a
-  separate payment due date (e.g. billed on the 6th, due on the 20th);
-  one-off changes to a single payment's amount; amounts that are estimates,
-  with a lower and/or upper bound and an expected amount (their average or
-  entered by hand now; estimated from past payments later).
+- Designed (see DECISIONS.md, "Estimated amounts, due dates and one-off
+  changes"), being built in this order: estimated amounts; totals with a
+  range; due dates; one-off changes to a payment. Estimates from past
+  payments come later.
 
 ## Next steps
 
