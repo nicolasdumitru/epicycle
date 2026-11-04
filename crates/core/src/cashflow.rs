@@ -114,6 +114,7 @@ mod tests {
             schedule: Schedule::new(rule, anchor).unwrap(),
             amount,
             estimate: None,
+            due: Default::default(),
         }
     }
 

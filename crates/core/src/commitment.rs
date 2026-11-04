@@ -158,6 +158,7 @@ mod tests {
             schedule: Schedule::starting(rule, date(2026, 1, 1)).unwrap(),
             amount,
             estimate: None,
+            due: Default::default(),
         }
     }
 

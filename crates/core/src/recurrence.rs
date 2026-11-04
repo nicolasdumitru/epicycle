@@ -328,6 +328,57 @@ fn days_between(a: Date, b: Date) -> i64 {
         .expect("the difference between two valid dates is representable in days")
 }
 
+/// When a payment is due, relative to its bill: when billed, a number of days
+/// later, or on a fixed day of the month (the first such day on or after the
+/// bill, clamped like billing days: 31 is the month's last day).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Due {
+    #[default]
+    OnBilling,
+    DaysAfter {
+        days: u16,
+    },
+    DayOfMonth {
+        day: DayOfMonth,
+    },
+}
+
+impl Due {
+    pub fn is_on_billing(&self) -> bool {
+        *self == Due::OnBilling
+    }
+
+    /// The due date of a bill issued on `billed`; `None` past the supported
+    /// date range.
+    pub fn on(self, billed: Date) -> Option<Date> {
+        match self {
+            Due::OnBilling => Some(billed),
+            Due::DaysAfter { days } => billed.checked_add(jiff::Span::new().days(days)).ok(),
+            Due::DayOfMonth { day } => {
+                let this_month = day.in_month(billed.year(), Month::of(billed))?;
+                if this_month >= billed {
+                    return Some(this_month);
+                }
+                let next = billed
+                    .first_of_month()
+                    .checked_add(jiff::Span::new().months(1))
+                    .ok()?;
+                day.in_month(next.year(), Month::of(next))
+            }
+        }
+    }
+
+    /// The most days a payment can fall due after its bill.
+    pub fn max_delay_days(self) -> i64 {
+        match self {
+            Due::OnBilling => 0,
+            Due::DaysAfter { days } => i64::from(days),
+            Due::DayOfMonth { .. } => 31,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -622,5 +673,30 @@ mod tests {
                 day = day.tomorrow().unwrap();
             }
         }
+    }
+
+    #[test]
+    fn due_dates_follow_their_bill() {
+        let due = |rule: Due, billed: Date| rule.on(billed).unwrap();
+        assert_eq!(due(Due::OnBilling, date(2026, 11, 6)), date(2026, 11, 6));
+        assert_eq!(
+            due(Due::DaysAfter { days: 14 }, date(2026, 11, 6)),
+            date(2026, 11, 20)
+        );
+        let on_20th = Due::DayOfMonth {
+            day: DayOfMonth::new(20).unwrap(),
+        };
+        // Billed on the 6th: due on the 20th of the same month.
+        assert_eq!(due(on_20th, date(2026, 11, 6)), date(2026, 11, 20));
+        // Billed on the 25th: due on the 20th of the next month.
+        assert_eq!(due(on_20th, date(2026, 11, 25)), date(2026, 12, 20));
+        // Billed on the day itself: due the same day.
+        assert_eq!(due(on_20th, date(2026, 11, 20)), date(2026, 11, 20));
+        // Day 31 is the last day of the month.
+        let last = Due::DayOfMonth {
+            day: DayOfMonth::LAST,
+        };
+        assert_eq!(due(last, date(2027, 2, 6)), date(2027, 2, 28));
+        assert_eq!(Due::DaysAfter { days: 14 }.max_delay_days(), 14);
     }
 }

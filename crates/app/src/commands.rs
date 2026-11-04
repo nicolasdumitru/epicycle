@@ -13,7 +13,7 @@ use epicycle_core::backup::RateChanges;
 use epicycle_core::commitment::{commitment_on, commitment_range_on, total_commitment_on};
 use epicycle_core::history::{self, HistoryReplacement, ImportPlan, Side};
 use epicycle_core::money::{Currency, Fractional, Money, MultiCurrency};
-use epicycle_core::recurrence::{DayOfMonth, Month, Rule, Schedule};
+use epicycle_core::recurrence::{DayOfMonth, Due, Month, Rule, Schedule};
 use epicycle_core::subscription::{Expected, Plan, Status, Subscription, SubscriptionId};
 use jiff::civil::Date;
 use serde::{Deserialize, Serialize, Serializer};
@@ -167,6 +167,46 @@ impl From<Expected> for ExpectedChoice {
     }
 }
 
+/// When payments are due after their bill (see `Due` in the core).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+#[ts(export)]
+pub enum DueChoice {
+    #[default]
+    OnBilling,
+    DaysAfter {
+        days: u16,
+    },
+    /// The first such day on or after the bill; 31 is the month's last day.
+    DayOfMonth {
+        day: u8,
+    },
+}
+
+impl TryFrom<DueChoice> for Due {
+    type Error = CommandError;
+
+    fn try_from(choice: DueChoice) -> Result<Self, Self::Error> {
+        Ok(match choice {
+            DueChoice::OnBilling => Due::OnBilling,
+            DueChoice::DaysAfter { days } => Due::DaysAfter { days },
+            DueChoice::DayOfMonth { day } => Due::DayOfMonth {
+                day: DayOfMonth::new(day)?,
+            },
+        })
+    }
+}
+
+impl From<Due> for DueChoice {
+    fn from(due: Due) -> Self {
+        match due {
+            Due::OnBilling => DueChoice::OnBilling,
+            Due::DaysAfter { days } => DueChoice::DaysAfter { days },
+            Due::DayOfMonth { day } => DueChoice::DayOfMonth { day: day.get() },
+        }
+    }
+}
+
 /// An amount that isn't exact, as typed: bounds in major units, either of
 /// which may be empty (not both).
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
@@ -266,6 +306,9 @@ pub struct NewSubscription {
     /// expected amount is entered by hand.
     #[serde(default)]
     pub estimate: Option<EstimateInput>,
+    /// When payments are due; by default when billed.
+    #[serde(default)]
+    pub due: DueChoice,
 }
 
 /// A currency the user can choose for a new subscription.
@@ -411,7 +454,8 @@ pub fn new_subscription(form: &NewSubscription, today: Date) -> Result<Subscript
         form.every,
         form.unit,
         next,
-    )?;
+    )?
+    .due(form.due.try_into()?);
     let start = match form.since.as_deref().map(str::trim) {
         Some(since) if !since.is_empty() => parse_date(since, "Start date")?,
         _ => today.min(next),
@@ -538,6 +582,9 @@ pub enum Edit {
         /// Set when the amount isn't exact.
         #[serde(default)]
         estimate: Option<EstimateInput>,
+        /// When payments are due; by default when billed.
+        #[serde(default)]
+        due: DueChoice,
     },
     /// Pause, cancel or resume from a date on.
     Status { from: String, status: StatusChoice },
@@ -554,6 +601,7 @@ pub fn apply_edit(s: &Subscription, edit: &Edit) -> Result<Subscription, Command
             unit,
             next_payment,
             estimate,
+            due,
         } => {
             let from = parse_date(from, "Effective date")?;
             let next = parse_date(next_payment, "First payment")?;
@@ -562,7 +610,8 @@ pub fn apply_edit(s: &Subscription, edit: &Edit) -> Result<Subscription, Command
                     "The first payment can't be before the change takes effect".into(),
                 ));
             }
-            let plan = plan_of(amount, estimate.as_ref(), s.currency(), *every, *unit, next)?;
+            let plan = plan_of(amount, estimate.as_ref(), s.currency(), *every, *unit, next)?
+                .due((*due).try_into()?);
             let changed = s.with_plan(from, plan)?;
             // Nothing is paid between the change and its first payment.
             Ok(if next > from {
@@ -1203,6 +1252,7 @@ mod tests {
             since: None,
             notes: String::new(),
             estimate: None,
+            due: Default::default(),
         }
     }
 
@@ -1303,6 +1353,7 @@ mod tests {
             unit: Unit::Months,
             next_payment: "2026-12-15".into(),
             estimate: None,
+            due: Default::default(),
         };
         let s = apply_edit(&music(), &edit).unwrap();
         let detail = detail_of(&s, date(2026, 12, 20)).unwrap();
@@ -1325,6 +1376,7 @@ mod tests {
             unit: Unit::Months,
             next_payment: "2027-03-12".into(),
             estimate: None,
+            due: Default::default(),
         };
         let s = apply_edit(&music(), &edit).unwrap();
         let view = subscription_view(&s, date(2026, 11, 3)).unwrap();
@@ -1375,6 +1427,7 @@ mod tests {
             unit: Unit::Months,
             next_payment: "2026-12-15".into(),
             estimate: estimate("20", "30", ExpectedChoice::Midpoint),
+            due: DueChoice::OnBilling,
         };
         let s = apply_edit(&music(), &edit).unwrap();
         let detail = detail_of(&s, date(2026, 12, 20)).unwrap();
@@ -1419,6 +1472,7 @@ mod tests {
             unit: Unit::Months,
             next_payment: "2026-11-30".into(),
             estimate: None,
+            due: Default::default(),
         };
         assert!(
             apply_edit(&music(), &edit)

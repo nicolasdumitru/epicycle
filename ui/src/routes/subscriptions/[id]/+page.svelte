@@ -111,7 +111,7 @@
 
 	function savePlan(event: SubmitEvent) {
 		event.preventDefault();
-		if (planForm) apply({ kind: 'plan', ...planForm });
+		if (planForm) apply({ kind: 'plan', due: { kind: 'on_billing' }, ...planForm });
 	}
 
 	function openStatusForm(status: StatusChoice) {

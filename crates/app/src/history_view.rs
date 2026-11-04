@@ -253,6 +253,7 @@ mod tests {
                 since: None,
                 notes: String::new(),
                 estimate: None,
+                due: Default::default(),
             },
             date(2026, 10, 1),
         )
