@@ -2,7 +2,9 @@
 name: CI
 
 on:
+  # Branches only: release tags are built by release.yml.
   push:
+    branches: ["**"]
   pull_request:
 
 permissions:

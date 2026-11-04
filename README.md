@@ -26,7 +26,31 @@ environment.systemPackages = [
 `nix flake update epicycle` then picks up a newer version. The app appears in
 your desktop's app launcher as Epicycle.
 
-## Development
+## Downloads
+
+Each [release](https://github.com/nicolasdumitru/epicycle/releases) has the
+Android app (a signed APK for 64-bit ARM phones) and Windows installers, free
+to download without a GitHub account. On Android, open the APK and allow
+installing from the app that opened it; updates install over the previous
+version and keep your data. The Windows installers aren't signed, so Windows
+warns before running them.
+
+## Making a release
+
+1. Set the new version in `Cargo.toml` (`workspace.package.version`) and
+   `crates/app/tauri.conf.json` (`version`). It must go up: Android doesn't
+   install an update with a lower version.
+2. Check it, commit, and tag:
+   ```sh
+   python3 scripts/check_release_version.py v0.2.0
+   git commit -am "chore: Release 0.2.0"
+   git tag v0.2.0
+   git push && git push origin v0.2.0
+   ```
+3. The Release workflow builds the APK and the Windows installers and
+   publishes them on GitHub, with notes made from the commits since the last
+   release.
+
 
 All tools come from the Nix flake. With direnv the shell loads automatically;
 otherwise run `nix develop` first.

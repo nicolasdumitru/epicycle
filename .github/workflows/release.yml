@@ -1,0 +1,76 @@
+# A release: pushing a version tag (e.g. `git tag v0.2.0 && git push origin
+# v0.2.0`) builds the app and publishes a GitHub Release with the binaries,
+# which anyone can download without a GitHub account:
+#
+# - Android: the APK, signed with the release key (required).
+# - Windows: the NSIS installer (.exe) and the MSI, unsigned.
+#
+# The tag must match the version in Cargo.toml and crates/app/tauri.conf.json
+# (see scripts/check_release_version.py); bump both before tagging. Android
+# only installs an update with the same or a higher version.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: The tag matches the app's version
+        id: check
+        run: echo "version=$(python3 scripts/check_release_version.py "$GITHUB_REF_NAME")" >> "$GITHUB_OUTPUT"
+
+  android:
+    needs: version
+    uses: ./.github/workflows/android.yml
+    with:
+      release: true
+    secrets: inherit
+
+  windows:
+    needs: version
+    uses: ./.github/workflows/windows.yml
+
+  publish:
+    needs: [version, android, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      # To create the release and upload its files.
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: built
+          merge-multiple: true
+
+      - name: Name the files after the version
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          mkdir dist
+          # Artifacts keep their folders (the Windows ones arrive in nsis/ and
+          # msi/), so find the files wherever they are.
+          find built -name 'app-universal-release.apk' -exec mv {} "dist/epicycle-$VERSION-android-arm64.apk" \;
+          find built \( -name '*-setup.exe' -o -name '*.msi' \) -exec mv {} dist/ \;
+          ls -l dist
+          # One APK and the two Windows installers, or something went wrong.
+          test "$(find dist -type f | wc -l)" -eq 3
+
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --verify-tag \
+            --title "Epicycle $VERSION" \
+            --generate-notes
