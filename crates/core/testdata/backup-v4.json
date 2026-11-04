@@ -146,7 +146,11 @@
                 },
                 "anchor": "2026-01-15"
               },
-              "amount": 1099
+              "amount": 1099,
+              "due": {
+                "kind": "day_of_month",
+                "day": 20
+              }
             }
           }
         ],

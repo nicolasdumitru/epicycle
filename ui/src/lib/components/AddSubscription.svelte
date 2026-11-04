@@ -53,6 +53,7 @@
 				name,
 				amount,
 				estimate,
+				due: { kind: 'on_billing' },
 				currency,
 				every,
 				unit,

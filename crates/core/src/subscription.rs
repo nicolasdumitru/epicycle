@@ -11,7 +11,7 @@ use thiserror::Error;
 use uuid::Uuid;
 
 use crate::money::{Currency, Money};
-use crate::recurrence::Schedule;
+use crate::recurrence::{Due, Schedule};
 
 /// Stable identifier that survives export and import.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -52,6 +52,10 @@ pub struct Plan {
     /// exact plans serialize as before.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub estimate: Option<Estimate>,
+    /// When each payment is due after its bill; left out of the JSON when due
+    /// on billing, the default.
+    #[serde(default, skip_serializing_if = "Due::is_on_billing")]
+    pub due: Due,
 }
 
 impl Plan {
@@ -61,7 +65,13 @@ impl Plan {
             schedule,
             amount,
             estimate: None,
+            due: Due::OnBilling,
         }
+    }
+
+    /// The same plan with payments due as `due` says.
+    pub fn due(self, due: Due) -> Self {
+        Plan { due, ..self }
     }
 
     /// A plan whose amount isn't exact: between `low` and `high` (either may
@@ -94,6 +104,7 @@ impl Plan {
             schedule,
             amount,
             estimate: Some(estimate),
+            due: Due::OnBilling,
         };
         plan.check()?;
         Ok(plan)
@@ -419,12 +430,32 @@ impl Subscription {
         )
     }
 
-    /// Every payment due in `[from, to)`, in date order. Plans with amount 0
-    /// have none.
+    /// Every payment due in `[from, to)`, by due date, ordered by billing date
+    /// (which is due-date order unless plans with different due rules meet).
+    /// Plans with amount 0 have none. Plans and status changes apply by
+    /// billing date.
     ///
     /// These come from the subscription's recorded plans and statuses, not from
     /// bank data: payments in the past are estimates of what was paid.
     pub fn payments_between(&self, from: Date, to: Date) -> impl Iterator<Item = Payment> + '_ {
+        // A bill issued up to the longest due delay before `from` can still
+        // fall due within the range; no bill after `to` can.
+        let lookback = self
+            .plans
+            .iter()
+            .map(|p| p.value.due.max_delay_days())
+            .max()
+            .unwrap_or(0);
+        let bills_from = from
+            .checked_sub(jiff::Span::new().days(lookback))
+            .unwrap_or(Date::MIN);
+        self.bills_between(bills_from, to)
+            .filter(move |p| from <= p.date && p.date < to)
+    }
+
+    /// Every payment billed in `[from, to)`, whenever it falls due, in billing
+    /// order.
+    fn bills_between(&self, from: Date, to: Date) -> impl Iterator<Item = Payment> + '_ {
         let plan_ends = self.plans.iter().skip(1).map(|p| p.from).chain([Date::MAX]);
         self.plans
             .iter()
@@ -435,16 +466,19 @@ impl Subscription {
                 plan.value
                     .schedule
                     .dates_between(lo, hi)
-                    .map(move |date| (date, plan.value.amount))
+                    .map(move |billed| (billed, plan.value))
             })
             // Nothing is paid under a plan with amount 0 (a free period), so
             // it has no payments, and the next payment is the next real one.
-            .filter(|&(_, amount)| amount != 0)
-            .filter(move |&(date, _)| self.status_on(date) == Some(Status::Active))
-            .map(move |(date, amount)| Payment {
-                subscription: self.id,
-                date,
-                amount: Money::new(amount, self.currency),
+            .filter(|(_, plan)| plan.amount != 0)
+            .filter(move |&(billed, _)| self.status_on(billed) == Some(Status::Active))
+            .filter_map(move |(billed, plan)| {
+                Some(Payment {
+                    subscription: self.id,
+                    billed,
+                    date: plan.due.on(billed)?,
+                    amount: Money::new(plan.amount, self.currency),
+                })
             })
     }
 
@@ -457,7 +491,28 @@ impl Subscription {
             Some(last) if last.value != Status::Active => last.from,
             _ => Date::MAX,
         };
-        self.payments_between(date, horizon).next()
+        // Bills come in billing order, and each falls due on or after its
+        // billing date. So once a bill is issued after the earliest due date
+        // seen, no later bill can fall due sooner.
+        let lookback = self
+            .plans
+            .iter()
+            .map(|p| p.value.due.max_delay_days())
+            .max()
+            .unwrap_or(0);
+        let bills_from = date
+            .checked_sub(jiff::Span::new().days(lookback))
+            .unwrap_or(Date::MIN);
+        let mut best: Option<Payment> = None;
+        for payment in self.bills_between(bills_from, horizon) {
+            if best.is_some_and(|b| payment.billed > b.date) {
+                break;
+            }
+            if payment.date >= date && best.is_none_or(|b| payment.date < b.date) {
+                best = Some(payment);
+            }
+        }
+        best
     }
 }
 
@@ -465,6 +520,9 @@ impl Subscription {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Payment {
     pub subscription: SubscriptionId,
+    /// When it's billed.
+    pub billed: Date,
+    /// When it's due: when the money actually leaves. Cash flow uses this.
     pub date: Date,
     pub amount: Money,
 }
@@ -498,7 +556,7 @@ fn insert_dated<T: Clone>(changes: &[Dated<T>], new: Dated<T>) -> Vec<Dated<T>> 
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::recurrence::{DayOfMonth, Rule};
+    use crate::recurrence::{DayOfMonth, Due, Rule};
     use jiff::civil::date;
     use std::num::NonZeroU16;
 
@@ -511,6 +569,7 @@ pub(crate) mod tests {
             schedule: Schedule::new(rule, anchor).unwrap(),
             amount,
             estimate: None,
+            due: Default::default(),
         }
     }
 
@@ -622,6 +681,55 @@ pub(crate) mod tests {
         assert_eq!(serde_json::from_value::<Plan>(json).unwrap(), estimated);
     }
 
+    fn due_dates(s: &Subscription, from: Date, to: Date) -> Vec<(Date, Date)> {
+        s.payments_between(from, to)
+            .map(|p| (p.billed, p.date))
+            .collect()
+    }
+
+    #[test]
+    fn payments_fall_on_their_due_date() {
+        // Billed on the 6th, due on the 20th.
+        let plan = monthly_plan(date(2026, 1, 6), 3000).due(Due::DayOfMonth {
+            day: DayOfMonth::new(20).unwrap(),
+        });
+        let s = subscription(date(2026, 1, 6), plan);
+        assert_eq!(
+            due_dates(&s, date(2026, 11, 1), date(2027, 1, 1)),
+            [
+                (date(2026, 11, 6), date(2026, 11, 20)),
+                (date(2026, 12, 6), date(2026, 12, 20))
+            ]
+        );
+        // A bill before the range that falls due in it counts; one due after
+        // the range doesn't.
+        assert_eq!(
+            due_dates(&s, date(2026, 11, 15), date(2026, 12, 15)),
+            [(date(2026, 11, 6), date(2026, 11, 20))]
+        );
+        let next = s.next_payment(date(2026, 11, 10)).unwrap();
+        assert_eq!(
+            (next.billed, next.date),
+            (date(2026, 11, 6), date(2026, 11, 20))
+        );
+    }
+
+    #[test]
+    fn the_next_payment_is_the_soonest_due_across_plans() {
+        // Due 20 days after billing until December, then due when billed: the
+        // December 5th bill (due that day) comes before the November 25th
+        // bill's due date (December 15th).
+        let late = monthly_plan(date(2026, 1, 25), 1000).due(Due::DaysAfter { days: 20 });
+        let s = subscription(date(2026, 1, 25), late)
+            .with_plan(date(2026, 12, 1), monthly_plan(date(2026, 12, 5), 1000))
+            .unwrap();
+        let next = s.next_payment(date(2026, 12, 1)).unwrap();
+        assert_eq!(
+            (next.billed, next.date),
+            (date(2026, 12, 5), date(2026, 12, 5))
+        );
+    }
+
     #[test]
     fn a_free_period_skips_payments_then_bills_as_before() {
         let s = subscription(date(2026, 1, 12), monthly_plan(date(2026, 1, 12), 2000))
@@ -692,6 +800,7 @@ pub(crate) mod tests {
             .unwrap(),
             amount: 9900,
             estimate: None,
+            due: Default::default(),
         };
         let s = subscription(date(2026, 1, 1), monthly_plan(date(2026, 1, 1), 999))
             .with_plan(date(2026, 4, 1), yearly)

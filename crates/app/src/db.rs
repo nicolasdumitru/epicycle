@@ -15,7 +15,7 @@ use epicycle_core::history::{
     RevisionId, plan_history_replacement, plan_import,
 };
 use epicycle_core::money::Currency;
-use epicycle_core::recurrence::{DayOfMonth, Month, Rule, Schedule};
+use epicycle_core::recurrence::{DayOfMonth, Due, Month, Rule, Schedule};
 use epicycle_core::subscription::{
     Dated, Estimate, Expected, Plan, Status, Subscription, SubscriptionId,
 };
@@ -34,8 +34,8 @@ use uuid::Uuid;
 /// - 1: the first format.
 /// - 2: adds `notes`, left out when empty. Version 1 snapshots read as version
 ///   2 snapshots without notes, so they need no upgrade.
-/// - 3: plans may have an `estimate`, left out for exact amounts. Older
-///   snapshots read unchanged.
+/// - 3: plans may have an `estimate` and a `due` rule, left out for exact
+///   amounts due when billed. Older snapshots read unchanged.
 const SNAPSHOT_VERSION: i64 = 3;
 
 #[derive(Debug, Error)]
@@ -137,7 +137,7 @@ impl Db {
         .await?;
         let plan_rows = sqlx::query!(
             "SELECT subscription_id, effective_from, unit, every, month, day, anchor, amount,
-                    estimate_low, estimate_high, estimate_expected
+                    estimate_low, estimate_high, estimate_expected, due_kind, due_value
              FROM plans ORDER BY subscription_id, effective_from"
         )
         .fetch_all(&self.pool)
@@ -163,6 +163,7 @@ impl Db {
                         row.estimate_high,
                         row.estimate_expected.as_deref(),
                     )?,
+                    due: due_from_columns(&row.due_kind, row.due_value)?,
                 },
             });
         }
@@ -787,11 +788,12 @@ async fn write_current(
         let estimate = plan.value.estimate;
         let (low, high) = (estimate.and_then(|e| e.low), estimate.and_then(|e| e.high));
         let expected = estimate.map(|e| expected_as_str(e.expected));
+        let (due_kind, due_value) = due_columns(plan.value.due);
         sqlx::query!(
             "INSERT INTO plans
                  (subscription_id, effective_from, unit, every, month, day, anchor, amount,
-                  estimate_low, estimate_high, estimate_expected)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                  estimate_low, estimate_high, estimate_expected, due_kind, due_value)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             id,
             from,
             unit,
@@ -802,7 +804,9 @@ async fn write_current(
             plan.value.amount,
             low,
             high,
-            expected
+            expected,
+            due_kind,
+            due_value
         )
         .execute(&mut *conn)
         .await?;
@@ -918,6 +922,28 @@ fn rule_from_columns(
     }
 }
 
+fn due_columns(due: Due) -> (&'static str, Option<i64>) {
+    match due {
+        Due::OnBilling => ("on_billing", None),
+        Due::DaysAfter { days } => ("days_after", Some(i64::from(days))),
+        Due::DayOfMonth { day } => ("day_of_month", Some(i64::from(day.get()))),
+    }
+}
+
+fn due_from_columns(kind: &str, value: Option<i64>) -> Result<Due, DbError> {
+    let number = || value.ok_or_else(|| corrupt(format_args!("{kind} without a value")));
+    match kind {
+        "on_billing" => Ok(Due::OnBilling),
+        "days_after" => Ok(Due::DaysAfter {
+            days: u16::try_from(number()?).map_err(corrupt)?,
+        }),
+        "day_of_month" => Ok(Due::DayOfMonth {
+            day: DayOfMonth::new(u8::try_from(number()?).map_err(corrupt)?).map_err(corrupt)?,
+        }),
+        other => Err(corrupt(format_args!("unknown due rule {other:?}"))),
+    }
+}
+
 fn expected_as_str(expected: Expected) -> &'static str {
     match expected {
         Expected::Midpoint => "midpoint",
@@ -980,6 +1006,7 @@ mod tests {
             schedule: Schedule::new(rule, date(2026, 1, 31)).unwrap(),
             amount: 1299,
             estimate: None,
+            due: Default::default(),
         };
         Subscription::new(
             SubscriptionId::generate(),
@@ -1001,6 +1028,7 @@ mod tests {
             schedule: Schedule::new(rule, anchor).unwrap(),
             amount,
             estimate: None,
+            due: Default::default(),
         }
     }
 
@@ -1026,6 +1054,7 @@ mod tests {
                     .unwrap(),
                     amount: 250,
                     estimate: None,
+                    due: Default::default(),
                 },
             )
             .unwrap()
@@ -1049,7 +1078,8 @@ mod tests {
                     Expected::Midpoint,
                     None,
                 )
-                .unwrap(),
+                .unwrap()
+                .due(Due::DaysAfter { days: 14 }),
             )
             .unwrap();
         db.save(&s).await.unwrap();
