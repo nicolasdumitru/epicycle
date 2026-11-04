@@ -10,6 +10,7 @@ use std::path::Path;
 
 use epicycle_core::backup::Backup;
 use epicycle_core::backup::RateChanges;
+use epicycle_core::cashflow::total_between;
 use epicycle_core::commitment::{commitment_on, commitment_range_on, total_commitment_on};
 use epicycle_core::history::{self, HistoryReplacement, ImportPlan, Side};
 use epicycle_core::money::{Currency, Fractional, Money, MultiCurrency};
@@ -886,6 +887,20 @@ pub struct ConvertedTotal {
     pub estimated: bool,
     /// How far the totals can vary; present when `estimated` and convertible.
     pub range: Option<TotalRange>,
+    /// Payments due this calendar month, and those still to come; absent when
+    /// a rate is missing.
+    pub this_month: Option<PeriodPayments>,
+    /// The same for this calendar year.
+    pub this_year: Option<PeriodPayments>,
+}
+
+/// Payments due in a calendar period, by due date: all of them, and those
+/// from today on (today's included), i.e. what's left to pay.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct PeriodPayments {
+    pub total: MoneyView,
+    pub left: MoneyView,
 }
 
 /// The lowest and highest the commitment can be. A missing highest total
@@ -908,7 +923,26 @@ pub fn converted_total_of(
     today: Date,
 ) -> Result<ConvertedTotal, CommandError> {
     let totals = total_commitment_on(subscriptions, today)?;
-    let mut currencies: Vec<Currency> = totals.monthly.iter().map(|f| f.currency).collect();
+    // This month's and this year's payments: [start, end) in all, and
+    // [today, end) still to come.
+    let month_start = today.first_of_month();
+    let year_start = today.first_of_year();
+    let month_end = month_start
+        .checked_add(jiff::Span::new().months(1))
+        .unwrap_or(Date::MAX);
+    let year_end = year_start
+        .checked_add(jiff::Span::new().years(1))
+        .unwrap_or(Date::MAX);
+    let cash = |from: Date, to: Date| total_between(subscriptions, from, to);
+    let month = (cash(month_start, month_end)?, cash(today, month_end)?);
+    let year = (cash(year_start, year_end)?, cash(today, year_end)?);
+
+    let mut currencies: Vec<Currency> = totals
+        .monthly
+        .iter()
+        .chain(year.0.iter())
+        .map(|f| f.currency)
+        .collect();
     currencies.push(to);
     currencies.sort();
     currencies.dedup();
@@ -926,6 +960,8 @@ pub fn converted_total_of(
         missing,
         estimated: false,
         range: None,
+        this_month: None,
+        this_year: None,
     };
     let range = commitment_range_on(subscriptions, today)?;
     view.estimated = range.estimated;
@@ -938,6 +974,15 @@ pub fn converted_total_of(
     view.annual = Some(rounded(annual.amount)?);
     // Both totals use the same rates; list each once.
     view.rates = monthly.rates.iter().map(|r| rate_view(r, today)).collect();
+    let period =
+        |(total, left): &(MultiCurrency, MultiCurrency)| -> Result<PeriodPayments, CommandError> {
+            Ok(PeriodPayments {
+                total: rounded(fx::convert_total(rates, total, to, today)?.amount)?,
+                left: rounded(fx::convert_total(rates, left, to, today)?.amount)?,
+            })
+        };
+    view.this_month = Some(period(&month)?);
+    view.this_year = Some(period(&year)?);
     if range.estimated {
         let convert = |total: &MultiCurrency| -> Result<MoneyView, CommandError> {
             rounded(fx::convert_total(rates, total, to, today)?.amount)
@@ -1759,6 +1804,29 @@ mod tests {
         let exact = converted_total_of(&subs[..1], &RateTable::new([]), eur, eur, today).unwrap();
         assert!(!exact.estimated);
         assert_eq!(exact.range, None);
+    }
+
+    #[test]
+    fn totals_show_this_month_and_what_is_left() {
+        let today = date(2026, 11, 3);
+        let mut early = form("5", 1, Unit::Months, "2026-12-01");
+        early.since = Some("2026-01-01".into());
+        let subs = [
+            // Due on the 15th: still to come this month.
+            priced("A", "10", "EUR"),
+            // Due on the 1st: already passed this month.
+            new_subscription(&early, today).unwrap(),
+        ];
+        let eur = Currency::EUR;
+        let total = converted_total_of(&subs, &RateTable::new([]), eur, eur, today).unwrap();
+        let month = total.this_month.unwrap();
+        assert_eq!(
+            (month.total.amount.as_str(), month.left.amount.as_str()),
+            ("15.00", "10.00")
+        );
+        // The rest of the year: November and December of A, December of B.
+        let year = total.this_year.unwrap();
+        assert_eq!(year.left.amount, "25.00");
     }
 
     #[test]

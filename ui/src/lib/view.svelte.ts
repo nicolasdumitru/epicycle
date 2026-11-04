@@ -6,5 +6,7 @@ export const view = $state({
 	/** Goes up when exchange rates or the default currency change. */
 	ratesVersion: 0,
 	/** Whether the totals also show how far estimated amounts can vary. */
-	showRange: false
+	showRange: false,
+	/** Whether the totals card shows this month or this year. */
+	period: 'month' as 'month' | 'year'
 });
