@@ -4,6 +4,7 @@
 import type { Billing } from './bindings/Billing';
 import type { ChangeView } from './bindings/ChangeView';
 import type { ConflictView } from './bindings/ConflictView';
+import type { DueChoice } from './bindings/DueChoice';
 import type { EstimateView } from './bindings/EstimateView';
 import type { ImportSummary } from './bindings/ImportSummary';
 import type { MoneyView } from './bindings/MoneyView';
@@ -198,7 +199,7 @@ export function describeChange(change: ChangeView, locale: Locale): string {
 		case 'plan_set':
 			return isFree(change.price)
 				? `Free from ${formatDate(change.from, locale)}: no payments`
-				: `From ${formatDate(change.from, locale)}: ${formatPrice(change.price, change.estimate, locale)}, ${describeBilling(change.billing, change.anchor, locale).toLowerCase()}`;
+				: `From ${formatDate(change.from, locale)}: ${formatPrice(change.price, change.estimate, locale)}, ${describeBilling(change.billing, change.anchor, locale).toLowerCase()}${describeDue(change.due)}`;
 		case 'plan_removed':
 			return `Price change from ${formatDate(change.from, locale)} removed`;
 		case 'status_set': {
@@ -236,6 +237,18 @@ export function isFree(money: MoneyView): boolean {
 	return Number(money.amount) === 0;
 }
 
+/** ", due on the 20th", ", due 14 days later", or nothing when due on billing. */
+export function describeDue(due: DueChoice): string {
+	switch (due.kind) {
+		case 'on_billing':
+			return '';
+		case 'days_after':
+			return due.days === 1 ? ', due a day later' : `, due ${due.days} days later`;
+		case 'day_of_month':
+			return `, due on ${dayOfMonth(due.day)}`;
+	}
+}
+
 /** "€20.00–€30.00", "up to €30.00" or "at least €20.00". */
 export function describeBounds(estimate: EstimateView, locale: Locale): string {
 	const low = estimate.low ? formatMoney(estimate.low, locale) : null;
@@ -265,7 +278,7 @@ export function describePrice(s: SubscriptionView, locale: Locale): string {
 		const billing = describeBilling(next.billing, next.anchor, locale);
 		return `Free until ${formatDate(next.from, locale)}, then ${formatPrice(next.price, next.estimate, locale)} · ${billing.charAt(0).toLowerCase()}${billing.slice(1)}`;
 	}
-	return `${formatPrice(s.price, s.estimate, locale)} · ${describeBilling(s.billing, s.nextPayment, locale)}`;
+	return `${formatPrice(s.price, s.estimate, locale)} · ${describeBilling(s.billing, s.nextPayment, locale)}${describeDue(s.due)}`;
 }
 
 /** "€50.00–€70.00", or "€50.00 or more" when there is no highest amount. */

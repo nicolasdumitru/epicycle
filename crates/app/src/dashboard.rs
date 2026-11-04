@@ -25,7 +25,10 @@ use crate::db::DbHandle;
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct UpcomingPayment {
+    /// When it's due.
     pub date: String,
+    /// When it's billed; the same as `date` unless due later.
+    pub billed: String,
     pub subscription_id: String,
     pub name: String,
     /// In the subscription's own currency.
@@ -41,6 +44,7 @@ pub fn upcoming_of(subscriptions: &[Subscription], today: Date, days: i32) -> Ve
             let s = subscriptions.iter().find(|s| s.id() == p.subscription)?;
             Some(UpcomingPayment {
                 date: p.date.to_string(),
+                billed: p.billed.to_string(),
                 subscription_id: p.subscription.to_string(),
                 name: s.name().to_owned(),
                 amount: p.amount.into(),

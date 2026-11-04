@@ -10,11 +10,14 @@
 	import type { Unit } from '#lib/bindings/Unit.ts';
 	import type { EstimateInput } from '#lib/bindings/EstimateInput.ts';
 	import AmountInput from '#lib/components/AmountInput.svelte';
+	import type { DueChoice } from '#lib/bindings/DueChoice.ts';
 	import DateInput from '#lib/components/DateInput.svelte';
+	import DueInput from '#lib/components/DueInput.svelte';
 	import HistoryList from '#lib/components/HistoryList.svelte';
 	import {
 		billingUnits,
 		describeBilling,
+		describeDue,
 		describePrice,
 		isFree,
 		formatDate,
@@ -40,6 +43,7 @@
 		from: string;
 		amount: string;
 		estimate: EstimateInput | null;
+		due: DueChoice;
 		every: number;
 		unit: Unit;
 		nextPayment: string;
@@ -96,6 +100,7 @@
 		planForm = {
 			from: detail.today,
 			amount: sub.price.amount,
+			due: sub.due,
 			estimate: sub.estimate
 				? {
 						low: sub.estimate.low?.amount ?? '',
@@ -111,7 +116,7 @@
 
 	function savePlan(event: SubmitEvent) {
 		event.preventDefault();
-		if (planForm) apply({ kind: 'plan', due: { kind: 'on_billing' }, ...planForm });
+		if (planForm) apply({ kind: 'plan', ...planForm });
 	}
 
 	function openStatusForm(status: StatusChoice) {
@@ -211,7 +216,7 @@
 							<span>
 								{isFree(plan.price)
 									? 'Free: no payments'
-									: `${formatPrice(plan.price, plan.estimate, locale)} · ${describeBilling(plan.billing, plan.anchor, locale)}`}
+									: `${formatPrice(plan.price, plan.estimate, locale)} · ${describeBilling(plan.billing, plan.anchor, locale)}${describeDue(plan.due)}`}
 							</span>
 						</li>
 					{/each}
@@ -252,9 +257,12 @@
 								</select>
 							</div>
 						</fieldset>
+						<DueInput bind:due={planForm.due} />
 						<DateInput
 							bind:value={planForm.nextPayment}
-							label="First payment at the new price"
+							label={planForm.due.kind === 'on_billing'
+								? 'First payment at the new price'
+								: 'First bill at the new price'}
 							hint="Nothing is paid before it. Monthly and yearly billing repeat on this day."
 							required
 							today={detail.today}

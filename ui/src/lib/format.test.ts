@@ -155,7 +155,8 @@ describe('describeChange', () => {
 					price: { amount: '12.50', currency: 'EUR' },
 					billing: { unit: 'months', every: 1, day: 15 },
 					anchor: '2026-12-15',
-					estimate: null
+					estimate: null,
+					due: { kind: 'on_billing' }
 				},
 				en
 			)
@@ -201,7 +202,8 @@ describe('describePrice', () => {
 		start: '2026-01-12',
 		notes: '',
 		nextChange: null,
-		estimate: null
+		estimate: null,
+		due: { kind: 'on_billing' as const }
 	};
 
 	it('shows the price and billing', () => {
@@ -224,6 +226,15 @@ describe('describePrice', () => {
 		).toBe('≈ €25.00 (up to €30.00) · Monthly on the 12th');
 	});
 
+	it('says when payments fall due after the bill', () => {
+		expect(describePrice({ ...sub, due: { kind: 'day_of_month', day: 20 } }, en)).toBe(
+			'€20.00 · Monthly on the 12th, due on the 20th'
+		);
+		expect(describePrice({ ...sub, due: { kind: 'days_after', days: 14 } }, en)).toBe(
+			'€20.00 · Monthly on the 12th, due 14 days later'
+		);
+	});
+
 	it('shows a free period and what follows it', () => {
 		const trial = {
 			...sub,
@@ -234,7 +245,8 @@ describe('describePrice', () => {
 				price: { amount: '20.00', currency: 'EUR' },
 				billing,
 				anchor: '2027-03-12',
-				estimate: null
+				estimate: null,
+				due: { kind: 'on_billing' as const }
 			}
 		};
 		expect(describePrice(trial, en)).toBe(

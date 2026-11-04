@@ -4,7 +4,15 @@ import type { MoneyView } from "./MoneyView";
 /**
  * One payment due soon.
  */
-export type UpcomingPayment = { date: string, subscriptionId: string, name: string, 
+export type UpcomingPayment = { 
+/**
+ * When it's due.
+ */
+date: string, 
+/**
+ * When it's billed; the same as `date` unless due later.
+ */
+billed: string, subscriptionId: string, name: string, 
 /**
  * In the subscription's own currency.
  */
