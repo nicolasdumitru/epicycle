@@ -108,10 +108,11 @@ real phone.
 - ~~Notes when adding a subscription~~ (done).
 - ~~Tabs~~ (done): Overview, Subscriptions and More, a bar at the bottom on
   phones and a row at the top on wider screens; the cards are unchanged.
-- Designed (see DECISIONS.md, "Estimated amounts, due dates and one-off
-  changes"), being built in this order: estimated amounts; totals with a
-  range; due dates; one-off changes to a payment. Estimates from past
-  payments come later.
+- ~~Estimated amounts, totals with a range, due dates, one-off changes to a
+  payment~~ (done; see DECISIONS.md, "Estimated amounts, due dates and
+  one-off changes"). Snapshot format version 3, backup format version 4.
+- Later: the expected amount estimated from past payments (one-off changes
+  record what was actually paid, which is what it needs).
 
 ## Next steps
 

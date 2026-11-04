@@ -14,6 +14,7 @@
 	import DateInput from '#lib/components/DateInput.svelte';
 	import DueInput from '#lib/components/DueInput.svelte';
 	import HistoryList from '#lib/components/HistoryList.svelte';
+	import PaymentList from '#lib/components/PaymentList.svelte';
 	import {
 		billingUnits,
 		describeBilling,
@@ -75,15 +76,19 @@
 			.catch((e) => (error = String(e)));
 	});
 
-	async function apply(edit: Edit) {
+	/** Applies an edit; true if it succeeded (errors show at the top). */
+	async function apply(edit: Edit): Promise<boolean> {
 		busy = true;
 		error = null;
 		try {
 			show(await editSubscription(id, edit));
 			planForm = null;
 			statusForm = null;
+			return true;
 		} catch (e) {
 			error = String(e);
+			window.scrollTo({ top: 0, behavior: 'smooth' });
+			return false;
 		} finally {
 			busy = false;
 		}
@@ -277,6 +282,16 @@
 						<button class="secondary" onclick={openPlanForm}>Change price or billing…</button>
 					</div>
 				{/if}
+			</div>
+		</section>
+
+		<section aria-labelledby="payments-heading">
+			<h2 id="payments-heading">Payments</h2>
+			<div class="card">
+				<p class="muted">
+					Change one payment when it was different: another amount, another day, or skipped.
+				</p>
+				<PaymentList payments={detail.payments} today={detail.today} {busy} onEdit={apply} />
 			</div>
 		</section>
 

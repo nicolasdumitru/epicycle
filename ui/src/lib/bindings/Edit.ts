@@ -20,4 +20,4 @@ estimate: EstimateInput | null,
 /**
  * When payments are due; by default when billed.
  */
-due: DueChoice, } | { "kind": "status", from: string, status: StatusChoice, };
+due: DueChoice, } | { "kind": "status", from: string, status: StatusChoice, } | { "kind": "payment", billed: string, amount: string, date: string, removed: boolean, } | { "kind": "reset_payment", billed: string, };

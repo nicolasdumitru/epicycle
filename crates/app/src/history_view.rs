@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 
 use epicycle_core::history::{Cause, History, Revision};
 use epicycle_core::money::Money;
-use epicycle_core::subscription::{Dated, Plan, Status, Subscription};
+use epicycle_core::subscription::{AdjustedDue, Adjustment, Dated, Plan, Status, Subscription};
 use jiff::civil::Date;
 use serde::Serialize;
 use ts_rs::TS;
@@ -55,6 +55,38 @@ pub enum ChangeView {
     StatusRemoved {
         from: String,
     },
+    /// One payment changed, identified by its billing date.
+    PaymentChanged {
+        billed: String,
+        /// The amount paid instead; absent when unchanged.
+        amount: Option<MoneyView>,
+        due: AdjustedDueView,
+    },
+    /// The change to one payment undone.
+    PaymentReset {
+        billed: String,
+    },
+}
+
+/// When a changed payment is due.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum AdjustedDueView {
+    Scheduled,
+    On { date: String },
+    Removed,
+}
+
+impl From<AdjustedDue> for AdjustedDueView {
+    fn from(due: AdjustedDue) -> Self {
+        match due {
+            AdjustedDue::Scheduled => AdjustedDueView::Scheduled,
+            AdjustedDue::On { date } => AdjustedDueView::On {
+                date: date.to_string(),
+            },
+            AdjustedDue::Removed => AdjustedDueView::Removed,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
@@ -153,6 +185,34 @@ fn dated_diff<T: Copy + PartialEq>(
         .collect()
 }
 
+/// Changes to single payments between two versions, by billing date.
+fn adjustment_changes(before: &Subscription, after: &Subscription) -> Vec<ChangeView> {
+    let old: BTreeMap<Date, Adjustment> = before
+        .adjustments()
+        .iter()
+        .map(|a| (a.billed, *a))
+        .collect();
+    let new: BTreeMap<Date, Adjustment> =
+        after.adjustments().iter().map(|a| (a.billed, *a)).collect();
+    let mut dates: Vec<Date> = old.keys().chain(new.keys()).copied().collect();
+    dates.sort();
+    dates.dedup();
+    dates
+        .into_iter()
+        .filter_map(|billed| match (old.get(&billed), new.get(&billed)) {
+            (_, Some(a)) if old.get(&billed) != Some(a) => Some(ChangeView::PaymentChanged {
+                billed: billed.to_string(),
+                amount: a.amount.map(|m| Money::new(m, after.currency()).into()),
+                due: a.due.into(),
+            }),
+            (Some(_), None) => Some(ChangeView::PaymentReset {
+                billed: billed.to_string(),
+            }),
+            _ => None,
+        })
+        .collect()
+}
+
 /// What changed from `before` to `after`. `had_parent` tells a new
 /// subscription from one recreated after a deletion.
 pub fn changes(
@@ -197,6 +257,7 @@ pub fn changes(
                     from: from.to_string(),
                 },
             ));
+            out.extend(adjustment_changes(b, a));
             out
         }
     }

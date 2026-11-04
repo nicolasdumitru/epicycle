@@ -208,6 +208,15 @@ export function describeChange(change: ChangeView, locale: Locale): string {
 		}
 		case 'status_removed':
 			return `Status change from ${formatDate(change.from, locale)} removed`;
+		case 'payment_changed': {
+			const parts: string[] = [];
+			if (change.amount) parts.push(formatMoney(change.amount, locale));
+			if (change.due.kind === 'on') parts.push(`paid ${formatDate(change.due.date, locale)}`);
+			if (change.due.kind === 'removed') parts.push('skipped, removed');
+			return `Payment billed ${formatDate(change.billed, locale)}: ${parts.join(', ') || 'changed'}`;
+		}
+		case 'payment_reset':
+			return `Payment billed ${formatDate(change.billed, locale)}: back as scheduled`;
 	}
 }
 
