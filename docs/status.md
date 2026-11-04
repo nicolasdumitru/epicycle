@@ -116,6 +116,9 @@ real phone.
 - Later, once the user decides what they want: a clearer monthly chart table,
   especially for the current month (part paid, part still due).
 
+**Reminders** (agreed 2026-11-04, in progress): see DECISIONS.md, "Reminders".
+Android first.
+
 ## Next steps
 
 Agreed order for the rest of milestone 1 (2026-11-03):
