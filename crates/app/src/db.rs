@@ -16,6 +16,7 @@ use epicycle_core::history::{
 };
 use epicycle_core::money::Currency;
 use epicycle_core::recurrence::{DayOfMonth, Due, Month, Rule, Schedule};
+use epicycle_core::reminders::ReminderSettings;
 use epicycle_core::subscription::{
     AdjustedDue, Adjustment, Dated, Estimate, Expected, Plan, Status, Subscription, SubscriptionId,
 };
@@ -512,6 +513,18 @@ impl Db {
         Ok(())
     }
 
+    pub async fn reminder_settings(&self) -> Result<ReminderSettings, DbError> {
+        let mut conn = self.pool.acquire().await?;
+        Ok(settings(&mut conn).await?.reminders)
+    }
+
+    pub async fn set_reminder_settings(&self, reminders: &ReminderSettings) -> Result<(), DbError> {
+        let mut tx = self.pool.begin().await?;
+        write_reminders(&mut tx, &reminders.clone().normalized()).await?;
+        tx.commit().await?;
+        Ok(())
+    }
+
     /// Identifies this installation in the change history.
     pub fn device_id(&self) -> Uuid {
         self.device_id
@@ -617,10 +630,15 @@ async fn load_history(conn: &mut SqliteConnection) -> Result<History, DbError> {
 }
 
 async fn settings(conn: &mut SqliteConnection) -> Result<Settings, DbError> {
-    let row = sqlx::query!("SELECT reporting_currency FROM app_state WHERE id = 1")
-        .fetch_one(&mut *conn)
-        .await?;
+    let row = sqlx::query!(
+        "SELECT reporting_currency, reminders_enabled, reminders_time FROM app_state WHERE id = 1"
+    )
+    .fetch_one(&mut *conn)
+    .await?;
     let favorites = sqlx::query!("SELECT currency FROM favorite_currencies ORDER BY position")
+        .fetch_all(&mut *conn)
+        .await?;
+    let lead_days = sqlx::query!("SELECT days FROM reminder_lead_days ORDER BY days")
         .fetch_all(&mut *conn)
         .await?;
     Ok(Settings {
@@ -629,7 +647,44 @@ async fn settings(conn: &mut SqliteConnection) -> Result<Settings, DbError> {
             .into_iter()
             .map(|r| r.currency.parse().map_err(corrupt))
             .collect::<Result<_, _>>()?,
+        reminders: ReminderSettings {
+            enabled: row.reminders_enabled != 0,
+            lead_days: lead_days
+                .into_iter()
+                .map(|r| u16::try_from(r.days).map_err(corrupt))
+                .collect::<Result<_, _>>()?,
+            time_of_day: row.reminders_time.parse().map_err(corrupt)?,
+        },
     })
+}
+
+/// Replaces the reminder settings.
+async fn write_reminders(
+    conn: &mut SqliteConnection,
+    reminders: &ReminderSettings,
+) -> Result<(), DbError> {
+    let enabled = i64::from(reminders.enabled);
+    let time = reminders.time_of_day.strftime("%H:%M:%S").to_string();
+    sqlx::query!(
+        "UPDATE app_state SET reminders_enabled = ?, reminders_time = ? WHERE id = 1",
+        enabled,
+        time
+    )
+    .execute(&mut *conn)
+    .await?;
+    sqlx::query!("DELETE FROM reminder_lead_days")
+        .execute(&mut *conn)
+        .await?;
+    for &days in &reminders.lead_days {
+        let days = i64::from(days);
+        sqlx::query!(
+            "INSERT INTO reminder_lead_days (days) VALUES (?) ON CONFLICT DO NOTHING",
+            days
+        )
+        .execute(&mut *conn)
+        .await?;
+    }
+    Ok(())
 }
 
 async fn write_settings(conn: &mut SqliteConnection, settings: &Settings) -> Result<(), DbError> {
@@ -640,7 +695,8 @@ async fn write_settings(conn: &mut SqliteConnection, settings: &Settings) -> Res
     )
     .execute(&mut *conn)
     .await?;
-    write_favorites(conn, &settings.favorite_currencies).await
+    write_favorites(conn, &settings.favorite_currencies).await?;
+    write_reminders(conn, &settings.reminders).await
 }
 
 /// Replaces the favourites. Duplicates keep their first position.
@@ -1612,6 +1668,27 @@ mod tests {
             .collect();
         assert_eq!(codes, ["MDL", "RON", "USD"]);
         assert_eq!(other.favorites().await.unwrap(), [ron, Currency::EUR, usd]);
+    }
+
+    #[tokio::test]
+    async fn reminder_settings_default_and_persist() {
+        let db = Db::open_in_memory().await.unwrap();
+        assert_eq!(
+            db.reminder_settings().await.unwrap(),
+            ReminderSettings::default()
+        );
+        let custom = ReminderSettings {
+            enabled: false,
+            lead_days: vec![3, 1, 3],
+            time_of_day: jiff::civil::time(8, 30, 0, 0),
+        };
+        db.set_reminder_settings(&custom).await.unwrap();
+        let stored = db.reminder_settings().await.unwrap();
+        assert_eq!(stored.lead_days, [1, 3]);
+        assert!(!stored.enabled);
+        assert_eq!(stored.time_of_day, jiff::civil::time(8, 30, 0, 0));
+        // They travel in backups.
+        assert_eq!(backup_of(&db).await.settings.reminders, stored);
     }
 
     #[tokio::test]

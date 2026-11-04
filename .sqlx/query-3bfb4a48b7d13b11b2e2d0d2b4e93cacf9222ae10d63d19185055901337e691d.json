@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO reminder_lead_days (days) VALUES (?) ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "3bfb4a48b7d13b11b2e2d0d2b4e93cacf9222ae10d63d19185055901337e691d"
+}

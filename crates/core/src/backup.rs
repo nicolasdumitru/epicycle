@@ -16,6 +16,7 @@ use jiff::civil::Date;
 use crate::fx::{Rate, RateSource};
 use crate::history::{History, HistoryError, Revision};
 use crate::money::Currency;
+use crate::reminders::ReminderSettings;
 
 /// Identifies Epicycle backups among other JSON files.
 pub const FORMAT: &str = "epicycle-backup";
@@ -32,7 +33,8 @@ pub const FORMAT: &str = "epicycle-backup";
 /// - 4: plans may have an `estimate` (bounds and how the expected amount is
 ///   chosen) and a `due` rule, and subscriptions `adjustments` to single
 ///   payments. Older files have exact amounts, due when billed, unchanged.
-pub const VERSION: u64 = 4;
+/// - 5: adds `settings.reminders`. Older files get the default reminders.
+pub const VERSION: u64 = 5;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
@@ -41,11 +43,16 @@ pub struct Settings {
     /// duplicates.
     #[serde(default)]
     pub favorite_currencies: Vec<Currency>,
+    /// When reminders go out. Files older than version 5 have the defaults.
+    #[serde(default)]
+    pub reminders: ReminderSettings,
 }
 
 impl Settings {
-    /// Settings with duplicate favourites removed, keeping the first of each.
+    /// Settings with duplicate favourites removed, keeping the first of each,
+    /// and reminder lead times in order.
     pub fn normalized(mut self) -> Self {
+        self.reminders = self.reminders.normalized();
         let mut seen = Vec::new();
         self.favorite_currencies.retain(|c| {
             let new = !seen.contains(c);
@@ -147,7 +154,7 @@ impl Backup {
             return Err(BackupError::NotABackup);
         }
         let file: File = match header.version {
-            1..=4 => serde_json::from_str(json).map_err(BackupError::Invalid)?,
+            1..=5 => serde_json::from_str(json).map_err(BackupError::Invalid)?,
             v if v > VERSION => return Err(BackupError::Newer(v)),
             v => return Err(BackupError::Unsupported(v)),
         };
@@ -232,6 +239,12 @@ mod tests {
     const V2: &str = include_str!("../testdata/backup-v2.json");
     const V3: &str = include_str!("../testdata/backup-v3.json");
     const V4: &str = include_str!("../testdata/backup-v4.json");
+    const V5: &str = include_str!("../testdata/backup-v5.json");
+
+    /// The default reminders, as older files read.
+    fn default_reminders() -> serde_json::Value {
+        serde_json::json!({"enabled": true, "lead_days": [1], "time_of_day": "09:00:00"})
+    }
 
     fn sample() -> Backup {
         let mut b = Builder::new();
@@ -245,6 +258,7 @@ mod tests {
             settings: Settings {
                 reporting_currency: Currency::EUR,
                 favorite_currencies: vec!["RON".parse().unwrap(), Currency::EUR],
+                reminders: ReminderSettings::default(),
             },
             history: History::new([r3, r1, r2]).unwrap(),
             manual_rates: vec![manual("RON", 1, "5.1")],
@@ -258,7 +272,16 @@ mod tests {
     }
 
     #[test]
-    fn version_4_format_is_stable() {
+    fn version_5_format_is_stable() {
+        let backup = Backup::from_json(V5).unwrap();
+        assert_eq!(backup.settings.reminders.lead_days, [1, 3]);
+        let written: serde_json::Value = serde_json::from_str(&backup.to_json()).unwrap();
+        let original: serde_json::Value = serde_json::from_str(V5).unwrap();
+        assert_eq!(written, original);
+    }
+
+    #[test]
+    fn version_4_still_imports() {
         let backup = Backup::from_json(V4).unwrap();
         let lessons = backup
             .history
@@ -268,9 +291,11 @@ mod tests {
         let plan = lessons.plans()[0].value;
         assert_eq!(plan.amount, 12000);
         assert_eq!(plan.range(), (10000, Some(14000)));
+        let mut expected: serde_json::Value = serde_json::from_str(V4).unwrap();
+        expected["version"] = VERSION.into();
+        expected["settings"]["reminders"] = default_reminders();
         let written: serde_json::Value = serde_json::from_str(&backup.to_json()).unwrap();
-        let original: serde_json::Value = serde_json::from_str(V4).unwrap();
-        assert_eq!(written, original);
+        assert_eq!(written, expected);
     }
 
     /// An older file (version 1 or 2), exported again: the same data in the
@@ -280,6 +305,7 @@ mod tests {
         expected["version"] = VERSION.into();
         expected["settings"]["favorite_currencies"] = serde_json::json!([]);
         expected["manual_rates"] = serde_json::json!([]);
+        expected["settings"]["reminders"] = default_reminders();
         expected
     }
 
@@ -293,6 +319,7 @@ mod tests {
         );
         let mut expected: serde_json::Value = serde_json::from_str(V3).unwrap();
         expected["version"] = VERSION.into();
+        expected["settings"]["reminders"] = default_reminders();
         let written: serde_json::Value = serde_json::from_str(&v3.to_json()).unwrap();
         assert_eq!(written, expected);
 
@@ -396,8 +423,8 @@ mod tests {
             BackupError::NotABackup
         ));
         assert!(matches!(
-            error(&with("version", 5.into())),
-            BackupError::Newer(5)
+            error(&with("version", 6.into())),
+            BackupError::Newer(6)
         ));
         assert!(matches!(
             error(&with("version", 0.into())),

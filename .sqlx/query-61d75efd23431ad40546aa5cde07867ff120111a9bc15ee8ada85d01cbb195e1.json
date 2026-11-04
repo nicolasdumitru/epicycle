@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT days FROM reminder_lead_days ORDER BY days",
+  "describe": {
+    "columns": [
+      {
+        "name": "days",
+        "ordinal": 0,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "reminder_lead_days",
+            "name": "days"
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "61d75efd23431ad40546aa5cde07867ff120111a9bc15ee8ada85d01cbb195e1"
+}
