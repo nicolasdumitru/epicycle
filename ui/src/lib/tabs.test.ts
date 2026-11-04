@@ -9,5 +9,6 @@ describe('tabFor', () => {
 		expect(tabFor('/deleted')).toBe('/subscriptions');
 		expect(tabFor('/more')).toBe('/more');
 		expect(tabFor('/rates')).toBe('/more');
+		expect(tabFor('/reminders')).toBe('/more');
 	});
 });

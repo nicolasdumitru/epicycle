@@ -9,11 +9,13 @@ import type { DeletedView } from './bindings/DeletedView';
 import type { Edit } from './bindings/Edit';
 import type { Imported } from './bindings/Imported';
 import type { MonthlyChart } from './bindings/MonthlyChart';
+import type { NotificationAccess } from './bindings/NotificationAccess';
 import type { ImportMode } from './bindings/ImportMode';
 import type { ImportSummary } from './bindings/ImportSummary';
 import type { NewSubscription } from './bindings/NewSubscription';
 import type { Overview } from './bindings/Overview';
 import type { RatesOverview } from './bindings/RatesOverview';
+import type { ReminderSettingsView } from './bindings/ReminderSettingsView';
 import type { RevisionView } from './bindings/RevisionView';
 import type { SubscriptionDetail } from './bindings/SubscriptionDetail';
 import type { UpcomingPayment } from './bindings/UpcomingPayment';
@@ -101,3 +103,15 @@ export const getUpcoming = (days: number): Promise<UpcomingPayment[]> =>
 /** Cash flow and commitment per month, in `currency` (the reporting currency if null). */
 export const getMonthlyChart = (currency: string | null): Promise<MonthlyChart> =>
 	invoke('monthly_chart', { currency });
+
+export const getReminderSettings = (): Promise<ReminderSettingsView> => invoke('reminder_settings');
+
+export const setReminderSettings = (settings: ReminderSettingsView): Promise<ReminderSettingsView> =>
+	invoke('set_reminder_settings', { settings });
+
+/** Whether the app may show notifications; "unsupported" on desktop for now. */
+export const getNotificationAccess = (): Promise<NotificationAccess> => invoke('notification_access');
+
+/** Shows the system's permission prompt if it still can. */
+export const requestNotificationAccess = (): Promise<NotificationAccess> =>
+	invoke('request_notification_access');

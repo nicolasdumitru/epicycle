@@ -12,6 +12,7 @@ export const tabs: Tab[] = [
 /** The tab a page belongs to, so detail pages keep their section highlighted. */
 export function tabFor(path: string): string {
 	if (path.startsWith('/subscriptions') || path.startsWith('/deleted')) return '/subscriptions';
-	if (path.startsWith('/more') || path.startsWith('/rates')) return '/more';
+	if (path.startsWith('/more') || path.startsWith('/rates') || path.startsWith('/reminders'))
+		return '/more';
 	return '/';
 }

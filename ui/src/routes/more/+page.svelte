@@ -10,6 +10,12 @@
 
 	<BackupPanel onImported={() => {}} />
 
+	<section aria-labelledby="reminders-heading">
+		<h2 id="reminders-heading">Reminders</h2>
+		<p class="muted">Notifications before payments, trials ending and price changes.</p>
+		<a class="link" href="/reminders">Reminders ›</a>
+	</section>
+
 	<section aria-labelledby="rates-heading">
 		<h2 id="rates-heading">Exchange rates</h2>
 		<p class="muted">The rates used to show totals in one currency, and your own.</p>
