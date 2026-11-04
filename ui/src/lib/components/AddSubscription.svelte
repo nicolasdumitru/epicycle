@@ -5,6 +5,8 @@
 	import type { Overview } from '#lib/bindings/Overview.ts';
 	import type { Unit } from '#lib/bindings/Unit.ts';
 	import { billingUnits as units } from '#lib/format.ts';
+	import type { EstimateInput } from '#lib/bindings/EstimateInput.ts';
+	import AmountInput from './AmountInput.svelte';
 	import CurrencyInput from './CurrencyInput.svelte';
 	import DateInput from './DateInput.svelte';
 	import FavoriteChips from './FavoriteChips.svelte';
@@ -17,6 +19,7 @@
 
 	let name = $state('');
 	let amount = $state('');
+	let estimate = $state<EstimateInput | null>(null);
 	let currency = $state('EUR');
 	let every = $state(1);
 	let unit = $state<Unit>('months');
@@ -49,6 +52,7 @@
 			const overview = await addSubscription({
 				name,
 				amount,
+				estimate,
 				currency,
 				every,
 				unit,
@@ -79,16 +83,12 @@
 		/>
 	</label>
 
-	<div class="row">
-		<label class="grow">
-			Price per payment
-			<input bind:value={amount} required inputmode="decimal" autocomplete="off" placeholder="9.99" />
-		</label>
-		<div class="currency">
-			<CurrencyInput bind:value={currency} options={currencies} label="Currency" />
-		</div>
+	<div class="currency">
+		<CurrencyInput bind:value={currency} options={currencies} label="Currency" />
 	</div>
 	<FavoriteChips {favorites} bind:value={currency} label="Currency" />
+
+	<AmountInput bind:amount bind:estimate {currency} />
 
 	<fieldset>
 		<legend>Billed every</legend>
@@ -126,7 +126,7 @@
 	/>
 
 	<label>
-		Notes <span class="optional">(optional)</span>
+		<span>Notes <span class="optional">(optional)</span></span>
 		<textarea
 			bind:value={notes}
 			rows="3"
@@ -182,9 +182,6 @@
 		gap: 0.75rem;
 	}
 
-	.grow {
-		flex: 1;
-	}
 
 	.currency {
 		width: 8rem;

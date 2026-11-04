@@ -153,7 +153,8 @@ describe('describeChange', () => {
 					from: '2026-12-01',
 					price: { amount: '12.50', currency: 'EUR' },
 					billing: { unit: 'months', every: 1, day: 15 },
-					anchor: '2026-12-15'
+					anchor: '2026-12-15',
+					estimate: null
 				},
 				en
 			)
@@ -198,11 +199,28 @@ describe('describePrice', () => {
 		nextPayment: '2026-11-12',
 		start: '2026-01-12',
 		notes: '',
-		nextChange: null
+		nextChange: null,
+		estimate: null
 	};
 
 	it('shows the price and billing', () => {
 		expect(describePrice(sub, en)).toBe('€20.00 · Monthly on the 12th');
+	});
+
+	it('marks estimated prices and shows their bounds', () => {
+		const eur = (amount: string) => ({ amount, currency: 'EUR' });
+		const estimated = {
+			...sub,
+			price: eur('25.00'),
+			estimate: { low: eur('20.00'), high: eur('30.00'), expected: 'midpoint' as const }
+		};
+		expect(describePrice(estimated, en)).toBe('≈ €25.00 (€20.00–€30.00) · Monthly on the 12th');
+		expect(
+			describePrice(
+				{ ...estimated, estimate: { low: null, high: eur('30.00'), expected: 'bound' } },
+				en
+			)
+		).toBe('≈ €25.00 (up to €30.00) · Monthly on the 12th');
 	});
 
 	it('shows a free period and what follows it', () => {
@@ -214,7 +232,8 @@ describe('describePrice', () => {
 				from: '2027-03-12',
 				price: { amount: '20.00', currency: 'EUR' },
 				billing,
-				anchor: '2027-03-12'
+				anchor: '2027-03-12',
+				estimate: null
 			}
 		};
 		expect(describePrice(trial, en)).toBe(

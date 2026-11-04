@@ -14,7 +14,7 @@ use serde::Serialize;
 use ts_rs::TS;
 use uuid::Uuid;
 
-use crate::commands::{Billing, MoneyView, StatusChoice};
+use crate::commands::{Billing, EstimateView, MoneyView, StatusChoice, estimate_view};
 
 /// One thing a revision changed.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -42,6 +42,7 @@ pub enum ChangeView {
         price: MoneyView,
         billing: Billing,
         anchor: String,
+        estimate: Option<EstimateView>,
     },
     PlanRemoved {
         from: String,
@@ -117,6 +118,7 @@ fn plan_view(currency: epicycle_core::money::Currency, plan: &Dated<Plan>) -> Ch
         price: Money::new(plan.value.amount, currency).into(),
         billing: plan.value.schedule.rule().into(),
         anchor: plan.value.schedule.anchor().to_string(),
+        estimate: estimate_view(currency, &plan.value),
     }
 }
 
@@ -250,6 +252,7 @@ mod tests {
                 next_payment: "2026-10-15".into(),
                 since: None,
                 notes: String::new(),
+                estimate: None,
             },
             date(2026, 10, 1),
         )

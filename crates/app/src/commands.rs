@@ -14,7 +14,7 @@ use epicycle_core::commitment::{commitment_on, total_commitment_on};
 use epicycle_core::history::{self, HistoryReplacement, ImportPlan, Side};
 use epicycle_core::money::{Currency, Fractional, Money};
 use epicycle_core::recurrence::{DayOfMonth, Month, Rule, Schedule};
-use epicycle_core::subscription::{Plan, Status, Subscription, SubscriptionId};
+use epicycle_core::subscription::{Expected, Plan, Status, Subscription, SubscriptionId};
 use jiff::civil::Date;
 use serde::{Deserialize, Serialize, Serializer};
 use tauri::State;
@@ -130,6 +130,70 @@ pub struct SubscriptionView {
     pub notes: String,
     /// The next plan change after today, e.g. the end of a free trial.
     pub next_change: Option<PlanView>,
+    /// Set when the current price is an estimate.
+    pub estimate: Option<EstimateView>,
+}
+
+/// How an estimate's expected amount is chosen (see `Expected` in the core).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum ExpectedChoice {
+    /// The average of both bounds.
+    Midpoint,
+    /// The one bound given.
+    Bound,
+    /// The `amount` field, entered by hand.
+    Manual,
+}
+
+impl From<ExpectedChoice> for Expected {
+    fn from(choice: ExpectedChoice) -> Self {
+        match choice {
+            ExpectedChoice::Midpoint => Expected::Midpoint,
+            ExpectedChoice::Bound => Expected::Bound,
+            ExpectedChoice::Manual => Expected::Manual,
+        }
+    }
+}
+
+impl From<Expected> for ExpectedChoice {
+    fn from(expected: Expected) -> Self {
+        match expected {
+            Expected::Midpoint => ExpectedChoice::Midpoint,
+            Expected::Bound => ExpectedChoice::Bound,
+            Expected::Manual => ExpectedChoice::Manual,
+        }
+    }
+}
+
+/// An amount that isn't exact, as typed: bounds in major units, either of
+/// which may be empty (not both).
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct EstimateInput {
+    pub low: String,
+    pub high: String,
+    pub expected: ExpectedChoice,
+}
+
+/// An estimate's bounds and how its expected amount (the price) was chosen.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub struct EstimateView {
+    pub low: Option<MoneyView>,
+    pub high: Option<MoneyView>,
+    pub expected: ExpectedChoice,
+}
+
+pub fn estimate_view(currency: Currency, plan: &Plan) -> Option<EstimateView> {
+    plan.estimate.map(|e| EstimateView {
+        low: e.low.map(|m| Money::new(m, currency).into()),
+        high: e.high.map(|m| Money::new(m, currency).into()),
+        expected: e.expected.into(),
+    })
 }
 
 /// A plan in a subscription's history.
@@ -142,6 +206,8 @@ pub struct PlanView {
     pub billing: Billing,
     /// ISO date of one payment, which fixes the schedule's phase.
     pub anchor: String,
+    /// Set when the price is an estimate.
+    pub estimate: Option<EstimateView>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
@@ -196,6 +262,10 @@ pub struct NewSubscription {
     /// Plain-text notes; may be empty.
     #[serde(default)]
     pub notes: String,
+    /// Set when the amount isn't exact; `amount` is then only used when the
+    /// expected amount is entered by hand.
+    #[serde(default)]
+    pub estimate: Option<EstimateInput>,
 }
 
 /// A currency the user can choose for a new subscription.
@@ -334,7 +404,14 @@ fn parse_date(text: &str, field: &str) -> Result<Date, CommandError> {
 pub fn new_subscription(form: &NewSubscription, today: Date) -> Result<Subscription, CommandError> {
     let currency = currency_in_use(&form.currency)?;
     let next = parse_date(&form.next_payment, "Next payment")?;
-    let plan = plan_of(&form.amount, currency, form.every, form.unit, next)?;
+    let plan = plan_of(
+        &form.amount,
+        form.estimate.as_ref(),
+        currency,
+        form.every,
+        form.unit,
+        next,
+    )?;
     let start = match form.since.as_deref().map(str::trim) {
         Some(since) if !since.is_empty() => parse_date(since, "Start date")?,
         _ => today.min(next),
@@ -362,12 +439,12 @@ pub fn new_subscription(form: &NewSubscription, today: Date) -> Result<Subscript
 /// `next`. Monthly and yearly billing repeat on `next`'s day.
 fn plan_of(
     amount: &str,
+    estimate: Option<&EstimateInput>,
     currency: Currency,
     every: u16,
     unit: Unit,
     next: Date,
 ) -> Result<Plan, CommandError> {
-    let amount = Money::parse_major(amount, currency)?;
     let every = NonZeroU16::new(every)
         .ok_or_else(|| CommandError("Billing interval must be at least 1".into()))?;
     let day = DayOfMonth::new(next.day() as u8)?;
@@ -381,11 +458,31 @@ fn plan_of(
             day,
         },
     };
-    Ok(Plan {
-        schedule: Schedule::new(rule, next)?,
-        amount: amount.minor,
-        estimate: None,
-    })
+    let schedule = Schedule::new(rule, next)?;
+    let Some(estimate) = estimate else {
+        return Ok(Plan::exact(
+            schedule,
+            Money::parse_major(amount, currency)?.minor,
+        ));
+    };
+    // An empty field is a missing bound.
+    let bound = |text: &str| -> Result<Option<i64>, CommandError> {
+        match text.trim() {
+            "" => Ok(None),
+            t => Ok(Some(Money::parse_major(t, currency)?.minor)),
+        }
+    };
+    let manual = match estimate.expected {
+        ExpectedChoice::Manual => Some(Money::parse_major(amount, currency)?.minor),
+        _ => None,
+    };
+    Ok(Plan::estimated(
+        schedule,
+        bound(&estimate.low)?,
+        bound(&estimate.high)?,
+        estimate.expected.into(),
+        manual,
+    )?)
 }
 
 /// A status the user can set.
@@ -438,6 +535,9 @@ pub enum Edit {
         /// The first payment under the new plan; monthly and yearly billing
         /// repeat on its day.
         next_payment: String,
+        /// Set when the amount isn't exact.
+        #[serde(default)]
+        estimate: Option<EstimateInput>,
     },
     /// Pause, cancel or resume from a date on.
     Status { from: String, status: StatusChoice },
@@ -453,6 +553,7 @@ pub fn apply_edit(s: &Subscription, edit: &Edit) -> Result<Subscription, Command
             every,
             unit,
             next_payment,
+            estimate,
         } => {
             let from = parse_date(from, "Effective date")?;
             let next = parse_date(next_payment, "First payment")?;
@@ -461,7 +562,8 @@ pub fn apply_edit(s: &Subscription, edit: &Edit) -> Result<Subscription, Command
                     "The first payment can't be before the change takes effect".into(),
                 ));
             }
-            let changed = s.with_plan(from, plan_of(amount, s.currency(), *every, *unit, next)?)?;
+            let plan = plan_of(amount, estimate.as_ref(), s.currency(), *every, *unit, next)?;
+            let changed = s.with_plan(from, plan)?;
             // Nothing is paid between the change and its first payment.
             Ok(if next > from {
                 changed.with_free_period(from, next)?
@@ -496,6 +598,7 @@ fn subscription_view(s: &Subscription, today: Date) -> Result<SubscriptionView, 
         next_payment: s.next_payment(today).map(|p| p.date.to_string()),
         start: s.start().to_string(),
         notes: s.notes().to_owned(),
+        estimate: estimate_view(s.currency(), plan),
         next_change: s
             .plans()
             .iter()
@@ -510,6 +613,7 @@ fn plan_view(currency: Currency, p: &epicycle_core::subscription::Dated<Plan>) -
         price: Money::new(p.value.amount, currency).into(),
         billing: p.value.schedule.rule().into(),
         anchor: p.value.schedule.anchor().to_string(),
+        estimate: estimate_view(currency, &p.value),
     }
 }
 
@@ -1060,6 +1164,7 @@ mod tests {
             next_payment: next.into(),
             since: None,
             notes: String::new(),
+            estimate: None,
         }
     }
 
@@ -1159,6 +1264,7 @@ mod tests {
             every: 1,
             unit: Unit::Months,
             next_payment: "2026-12-15".into(),
+            estimate: None,
         };
         let s = apply_edit(&music(), &edit).unwrap();
         let detail = detail_of(&s, date(2026, 12, 20)).unwrap();
@@ -1180,10 +1286,63 @@ mod tests {
             every: 1,
             unit: Unit::Months,
             next_payment: "2027-03-12".into(),
+            estimate: None,
         };
         let s = apply_edit(&music(), &edit).unwrap();
         let view = subscription_view(&s, date(2026, 11, 3)).unwrap();
         assert_eq!(view.next_payment.as_deref(), Some("2027-03-12"));
+    }
+
+    fn estimate(low: &str, high: &str, expected: ExpectedChoice) -> Option<EstimateInput> {
+        Some(EstimateInput {
+            low: low.into(),
+            high: high.into(),
+            expected,
+        })
+    }
+
+    #[test]
+    fn amounts_can_be_estimates() {
+        let today = date(2026, 11, 3);
+        let mut f = form("", 1, Unit::Months, "2026-11-20");
+        f.estimate = estimate("40", "60", ExpectedChoice::Midpoint);
+        let view = subscription_view(&new_subscription(&f, today).unwrap(), today).unwrap();
+        assert_eq!(view.price.amount, "50.00");
+        let e = view.estimate.unwrap();
+        assert_eq!(e.low.unwrap().amount, "40.00");
+        assert_eq!(e.high.unwrap().amount, "60.00");
+        // The monthly commitment uses the expected amount.
+        assert_eq!(view.monthly.unwrap().amount, "50.00");
+
+        f.estimate = estimate("", "60", ExpectedChoice::Bound);
+        let s = new_subscription(&f, today).unwrap();
+        assert_eq!(subscription_view(&s, today).unwrap().price.amount, "60.00");
+
+        f.amount = "55,5".into();
+        f.estimate = estimate("40", "60", ExpectedChoice::Manual);
+        let s = new_subscription(&f, today).unwrap();
+        assert_eq!(subscription_view(&s, today).unwrap().price.amount, "55.50");
+
+        f.amount = "70".into();
+        let error = new_subscription(&f, today).unwrap_err().0;
+        assert!(error.contains("estimate"), "{error}");
+    }
+
+    #[test]
+    fn a_plan_change_can_make_the_amount_an_estimate() {
+        let edit = Edit::Plan {
+            from: "2026-12-01".into(),
+            amount: String::new(),
+            every: 1,
+            unit: Unit::Months,
+            next_payment: "2026-12-15".into(),
+            estimate: estimate("20", "30", ExpectedChoice::Midpoint),
+        };
+        let s = apply_edit(&music(), &edit).unwrap();
+        let detail = detail_of(&s, date(2026, 12, 20)).unwrap();
+        assert_eq!(detail.subscription.price.amount, "25.00");
+        assert!(detail.plans[0].estimate.is_none());
+        assert!(detail.plans[1].estimate.is_some());
     }
 
     #[test]
@@ -1221,6 +1380,7 @@ mod tests {
             every: 1,
             unit: Unit::Months,
             next_payment: "2026-11-30".into(),
+            estimate: None,
         };
         assert!(
             apply_edit(&music(), &edit)
