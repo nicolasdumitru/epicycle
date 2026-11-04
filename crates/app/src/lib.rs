@@ -2,6 +2,7 @@ pub mod commands;
 pub mod dashboard;
 pub mod db;
 pub mod history_view;
+pub mod notifications;
 pub mod rates;
 
 use tauri::Manager;
@@ -12,6 +13,7 @@ use crate::db::{Db, DbHandle};
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         // Registered before the database is open; see DbHandle.
         .manage(DbHandle::default())
         .setup(|app| {
@@ -20,6 +22,9 @@ pub fn run() {
             let db = tauri::async_runtime::block_on(Db::open(&dir.join("epicycle.sqlite3")))?;
             app.state::<DbHandle>().set(db);
             rates::spawn_refresher(app.handle().clone());
+            // Schedules reminders now and after every change (mobile only).
+            let rescheduler = notifications::spawn(app.handle().clone());
+            app.manage(rescheduler);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -43,6 +48,10 @@ pub fn run() {
             commands::set_reporting_currency,
             commands::favorite_currencies,
             commands::set_favorite_currencies,
+            notifications::reminder_settings,
+            notifications::set_reminder_settings,
+            notifications::notification_access,
+            notifications::request_notification_access,
             dashboard::upcoming_payments,
             dashboard::monthly_chart,
         ])
