@@ -116,8 +116,15 @@ real phone.
 - Later, once the user decides what they want: a clearer monthly chart table,
   especially for the current month (part paid, part still due).
 
-**Reminders** (agreed 2026-11-04, in progress): see DECISIONS.md, "Reminders".
-Android first.
+**Reminders** (agreed 2026-11-04, done on Android; see DECISIONS.md,
+"Reminders"): notifications before payments due, separate bills, free trials
+ending and price changes, at one or more lead times (default 1 day before at
+09:00), set on a Reminders screen under More, which also asks for permission.
+The settings are in the database and in backups (format version 5). Tested
+in the Pixel 10 emulator: the permission prompt, scheduling (inexact alarms,
+within a few minutes) and the notifications themselves. Desktop shows the
+settings but doesn't schedule, and iOS comes later. Not yet tried on a real
+phone, or across a reboot (the plugin restores alarms at boot).
 
 ## Next steps
 
