@@ -29,7 +29,9 @@ pub const FORMAT: &str = "epicycle-backup";
 ///   that older apps refuse these files instead of dropping the notes.
 /// - 3: adds `settings.favorite_currencies` and `manual_rates`. Older files
 ///   are read as having none of either.
-pub const VERSION: u64 = 3;
+/// - 4: plans may have an `estimate` (bounds and how the expected amount is
+///   chosen). Older files have exact amounts only.
+pub const VERSION: u64 = 4;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
@@ -144,7 +146,7 @@ impl Backup {
             return Err(BackupError::NotABackup);
         }
         let file: File = match header.version {
-            1..=3 => serde_json::from_str(json).map_err(BackupError::Invalid)?,
+            1..=4 => serde_json::from_str(json).map_err(BackupError::Invalid)?,
             v if v > VERSION => return Err(BackupError::Newer(v)),
             v => return Err(BackupError::Unsupported(v)),
         };
@@ -228,6 +230,7 @@ mod tests {
     const V1: &str = include_str!("../testdata/backup-v1.json");
     const V2: &str = include_str!("../testdata/backup-v2.json");
     const V3: &str = include_str!("../testdata/backup-v3.json");
+    const V4: &str = include_str!("../testdata/backup-v4.json");
 
     fn sample() -> Backup {
         let mut b = Builder::new();
@@ -254,31 +257,23 @@ mod tests {
     }
 
     #[test]
-    fn version_3_format_is_stable() {
-        let backup = Backup::from_json(V3).unwrap();
-        assert_eq!(backup.history.revisions().len(), 7);
-        assert_eq!(backup.history.current().count(), 2);
-        assert!(
-            backup
-                .history
-                .current()
-                .any(|s| s.notes().starts_with("Family plan"))
-        );
-        let favorites: Vec<&str> = backup
-            .settings
-            .favorite_currencies
-            .iter()
-            .map(|c| c.code())
-            .collect();
-        assert_eq!(favorites, ["RON", "EUR", "USD"]);
-        assert_eq!(backup.manual_rates.len(), 2);
+    fn version_4_format_is_stable() {
+        let backup = Backup::from_json(V4).unwrap();
+        let lessons = backup
+            .history
+            .current()
+            .find(|s| s.name() == "Language lessons")
+            .unwrap();
+        let plan = lessons.plans()[0].value;
+        assert_eq!(plan.amount, 12000);
+        assert_eq!(plan.range(), (10000, Some(14000)));
         let written: serde_json::Value = serde_json::from_str(&backup.to_json()).unwrap();
-        let original: serde_json::Value = serde_json::from_str(V3).unwrap();
+        let original: serde_json::Value = serde_json::from_str(V4).unwrap();
         assert_eq!(written, original);
     }
 
-    /// An older file, exported again: the same data in the current version,
-    /// with no favourites and no manual rates.
+    /// An older file (version 1 or 2), exported again: the same data in the
+    /// current version, with no favourites and no manual rates.
     fn upgraded(old: &str) -> serde_json::Value {
         let mut expected: serde_json::Value = serde_json::from_str(old).unwrap();
         expected["version"] = VERSION.into();
@@ -289,6 +284,17 @@ mod tests {
 
     #[test]
     fn older_versions_still_import() {
+        let v3 = Backup::from_json(V3).unwrap();
+        assert!(
+            v3.history
+                .current()
+                .all(|s| s.plans().iter().all(|p| p.value.estimate.is_none()))
+        );
+        let mut expected: serde_json::Value = serde_json::from_str(V3).unwrap();
+        expected["version"] = VERSION.into();
+        let written: serde_json::Value = serde_json::from_str(&v3.to_json()).unwrap();
+        assert_eq!(written, expected);
+
         let v2 = Backup::from_json(V2).unwrap();
         assert!(v2.history.current().any(|s| !s.notes().is_empty()));
         let written: serde_json::Value = serde_json::from_str(&v2.to_json()).unwrap();
@@ -389,8 +395,8 @@ mod tests {
             BackupError::NotABackup
         ));
         assert!(matches!(
-            error(&with("version", 4.into())),
-            BackupError::Newer(4)
+            error(&with("version", 5.into())),
+            BackupError::Newer(5)
         ));
         assert!(matches!(
             error(&with("version", 0.into())),

@@ -44,8 +44,130 @@ pub enum Status {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Plan {
     pub schedule: Schedule,
-    /// Amount per payment, in minor units of the subscription's currency.
+    /// Amount per payment, in minor units of the subscription's currency: the
+    /// exact amount, or the expected one when `estimate` is set. Everything
+    /// that adds up money uses it.
     pub amount: i64,
+    /// Set when the amount isn't exact. Left out of the JSON when absent, so
+    /// exact plans serialize as before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub estimate: Option<Estimate>,
+}
+
+impl Plan {
+    /// A plan with an exact amount.
+    pub fn exact(schedule: Schedule, amount: i64) -> Self {
+        Plan {
+            schedule,
+            amount,
+            estimate: None,
+        }
+    }
+
+    /// A plan whose amount isn't exact: between `low` and `high` (either may
+    /// be missing, not both), expected as `expected` says. `manual` is the
+    /// expected amount when entered by hand, and ignored otherwise.
+    pub fn estimated(
+        schedule: Schedule,
+        low: Option<i64>,
+        high: Option<i64>,
+        expected: Expected,
+        manual: Option<i64>,
+    ) -> Result<Self, SubscriptionError> {
+        let estimate = Estimate {
+            low,
+            high,
+            expected,
+        };
+        let amount = match expected {
+            Expected::Midpoint => match (low, high) {
+                (Some(l), Some(h)) => midpoint(l, h),
+                _ => return Err(SubscriptionError::InvalidEstimate),
+            },
+            Expected::Bound => match (low, high) {
+                (Some(b), None) | (None, Some(b)) => b,
+                _ => return Err(SubscriptionError::InvalidEstimate),
+            },
+            Expected::Manual => manual.ok_or(SubscriptionError::InvalidEstimate)?,
+        };
+        let plan = Plan {
+            schedule,
+            amount,
+            estimate: Some(estimate),
+        };
+        plan.check()?;
+        Ok(plan)
+    }
+
+    /// The lowest and highest the amount can be: both the amount when exact; a
+    /// missing lower bound counts as 0 and a missing upper bound as unknown.
+    pub fn range(&self) -> (i64, Option<i64>) {
+        match self.estimate {
+            None => (self.amount, Some(self.amount)),
+            Some(e) => (e.low.unwrap_or(0), e.high),
+        }
+    }
+
+    fn check(&self) -> Result<(), SubscriptionError> {
+        if self.amount < 0 {
+            return Err(SubscriptionError::NegativeAmount);
+        }
+        let Some(e) = self.estimate else {
+            return Ok(());
+        };
+        let bounds_ok = match (e.low, e.high) {
+            (None, None) => false,
+            (Some(l), Some(h)) => 0 <= l && l <= h,
+            (Some(b), None) | (None, Some(b)) => 0 <= b,
+        };
+        let expected_ok = match (e.expected, e.low, e.high) {
+            (Expected::Midpoint, Some(l), Some(h)) => self.amount == midpoint(l, h),
+            (Expected::Bound, Some(b), None) | (Expected::Bound, None, Some(b)) => self.amount == b,
+            (Expected::Manual, low, high) => {
+                low.is_none_or(|l| l <= self.amount) && high.is_none_or(|h| self.amount <= h)
+            }
+            _ => false,
+        };
+        if bounds_ok && expected_ok {
+            Ok(())
+        } else {
+            Err(SubscriptionError::InvalidEstimate)
+        }
+    }
+}
+
+/// An amount that isn't exact: its bounds, and how the expected amount (the
+/// plan's `amount`) was chosen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct Estimate {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub low: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub high: Option<i64>,
+    pub expected: Expected,
+}
+
+/// How an estimate's expected amount is chosen.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Expected {
+    /// The average of the two bounds.
+    Midpoint,
+    /// The only bound given.
+    Bound,
+    /// Entered by hand, within the bounds.
+    Manual,
+}
+
+/// The average of two amounts in minor units, rounded half to even.
+fn midpoint(low: i64, high: i64) -> i64 {
+    let sum = low + high;
+    let half = sum.div_euclid(2);
+    if sum.rem_euclid(2) == 1 && half % 2 != 0 {
+        half + 1
+    } else {
+        half
+    }
 }
 
 /// A value that takes effect on a date and lasts until the next change.
@@ -61,6 +183,10 @@ pub enum SubscriptionError {
     EmptyName,
     #[error("amount must not be negative")]
     NegativeAmount,
+    #[error(
+        "an estimate needs a lower or upper bound (lower first), and an expected amount within them"
+    )]
+    InvalidEstimate,
     #[error("a subscription needs at least one plan")]
     NoPlan,
     #[error("change on {0} is before the subscription started on {1}")]
@@ -154,8 +280,8 @@ impl Subscription {
             return Err(SubscriptionError::EmptyName);
         }
         let start = plans.first().ok_or(SubscriptionError::NoPlan)?.from;
-        if plans.iter().any(|p| p.value.amount < 0) {
-            return Err(SubscriptionError::NegativeAmount);
+        for plan in &plans {
+            plan.value.check()?;
         }
         check_increasing(&plans)?;
         check_increasing(&status_changes)?;
@@ -255,8 +381,12 @@ impl Subscription {
         let plan = *self
             .plan_on(from)
             .ok_or(SubscriptionError::BeforeStart(from, self.start()))?;
-        self.with_plan(from, Plan { amount: 0, ..plan })?
-            .with_plan(until, plan)
+        let free = Plan {
+            amount: 0,
+            estimate: None,
+            ..plan
+        };
+        self.with_plan(from, free)?.with_plan(until, plan)
     }
 
     /// The subscription with its status changing to `status` on `from`. Like
@@ -380,6 +510,7 @@ pub(crate) mod tests {
         Plan {
             schedule: Schedule::new(rule, anchor).unwrap(),
             amount,
+            estimate: None,
         }
     }
 
@@ -427,6 +558,68 @@ pub(crate) mod tests {
         let json = serde_json::to_string(&with).unwrap();
         assert!(json.contains(r#""notes":"Shared""#), "{json}");
         assert_eq!(serde_json::from_str::<Subscription>(&json).unwrap(), with);
+    }
+
+    fn schedule() -> Schedule {
+        monthly_plan(date(2026, 1, 15), 0).schedule
+    }
+
+    #[test]
+    fn estimates_choose_their_expected_amount() {
+        let avg = Plan::estimated(schedule(), Some(2000), Some(3001), Expected::Midpoint, None);
+        // 25.005 rounds half to even.
+        assert_eq!(avg.unwrap().amount, 2500);
+        let upper = Plan::estimated(schedule(), None, Some(3000), Expected::Bound, None).unwrap();
+        assert_eq!(upper.amount, 3000);
+        assert_eq!(upper.range(), (0, Some(3000)));
+        let lower = Plan::estimated(schedule(), Some(2000), None, Expected::Bound, None).unwrap();
+        assert_eq!(lower.range(), (2000, None));
+        let manual = Plan::estimated(
+            schedule(),
+            Some(2000),
+            Some(3000),
+            Expected::Manual,
+            Some(2800),
+        );
+        assert_eq!(manual.unwrap().amount, 2800);
+        assert_eq!(Plan::exact(schedule(), 999).range(), (999, Some(999)));
+    }
+
+    #[test]
+    fn rejects_estimates_that_dont_add_up() {
+        let bad = |low, high, expected, manual| {
+            Plan::estimated(schedule(), low, high, expected, manual)
+                == Err(SubscriptionError::InvalidEstimate)
+        };
+        assert!(bad(None, None, Expected::Manual, Some(100)));
+        assert!(bad(Some(3000), Some(2000), Expected::Midpoint, None));
+        assert!(bad(Some(2000), None, Expected::Midpoint, None));
+        assert!(bad(Some(2000), Some(3000), Expected::Bound, None));
+        assert!(bad(Some(2000), Some(3000), Expected::Manual, Some(3500)));
+        assert!(bad(Some(2000), Some(3000), Expected::Manual, None));
+        // A stored plan whose amount disagrees with its estimate is refused too.
+        let mut plan =
+            Plan::estimated(schedule(), Some(2000), Some(3000), Expected::Midpoint, None).unwrap();
+        plan.amount = 2600;
+        let s = subscription(date(2026, 1, 15), monthly_plan(date(2026, 1, 15), 999));
+        assert_eq!(
+            s.with_plan(date(2026, 3, 1), plan),
+            Err(SubscriptionError::InvalidEstimate)
+        );
+    }
+
+    #[test]
+    fn exact_plans_serialize_as_before() {
+        let json = serde_json::to_value(monthly_plan(date(2026, 1, 15), 999)).unwrap();
+        assert!(json.get("estimate").is_none(), "{json}");
+        let estimated =
+            Plan::estimated(schedule(), None, Some(3000), Expected::Bound, None).unwrap();
+        let json = serde_json::to_value(estimated).unwrap();
+        assert_eq!(
+            json["estimate"],
+            serde_json::json!({"high": 3000, "expected": "bound"})
+        );
+        assert_eq!(serde_json::from_value::<Plan>(json).unwrap(), estimated);
     }
 
     #[test]
@@ -498,6 +691,7 @@ pub(crate) mod tests {
             )
             .unwrap(),
             amount: 9900,
+            estimate: None,
         };
         let s = subscription(date(2026, 1, 1), monthly_plan(date(2026, 1, 1), 999))
             .with_plan(date(2026, 4, 1), yearly)

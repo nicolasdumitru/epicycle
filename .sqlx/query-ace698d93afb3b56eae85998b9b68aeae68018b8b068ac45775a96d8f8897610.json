@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT subscription_id, effective_from, unit, every, month, day, anchor, amount\n             FROM plans ORDER BY subscription_id, effective_from",
+  "query": "SELECT subscription_id, effective_from, unit, every, month, day, anchor, amount,\n                    estimate_low, estimate_high, estimate_expected\n             FROM plans ORDER BY subscription_id, effective_from",
   "describe": {
     "columns": [
       {
@@ -90,6 +90,39 @@
             "name": "amount"
           }
         }
+      },
+      {
+        "name": "estimate_low",
+        "ordinal": 8,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "plans",
+            "name": "estimate_low"
+          }
+        }
+      },
+      {
+        "name": "estimate_high",
+        "ordinal": 9,
+        "type_info": "Integer",
+        "origin": {
+          "Table": {
+            "table": "plans",
+            "name": "estimate_high"
+          }
+        }
+      },
+      {
+        "name": "estimate_expected",
+        "ordinal": 10,
+        "type_info": "Text",
+        "origin": {
+          "Table": {
+            "table": "plans",
+            "name": "estimate_expected"
+          }
+        }
       }
     ],
     "parameters": {
@@ -103,8 +136,11 @@
       true,
       true,
       false,
-      false
+      false,
+      true,
+      true,
+      true
     ]
   },
-  "hash": "cf50ac5bb67641b3f58d5bb53834c491babcb3a9074cda72165efe94afca3c91"
+  "hash": "ace698d93afb3b56eae85998b9b68aeae68018b8b068ac45775a96d8f8897610"
 }
