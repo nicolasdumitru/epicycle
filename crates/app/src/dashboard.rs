@@ -212,6 +212,7 @@ mod tests {
                 next_payment: next.into(),
                 since: Some("2025-01-01".into()),
                 notes: String::new(),
+                estimate: None,
             },
             date(2026, 11, 3),
         )

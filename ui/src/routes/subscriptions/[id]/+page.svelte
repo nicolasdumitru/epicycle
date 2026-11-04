@@ -8,6 +8,8 @@
 	import type { StatusChoice } from '#lib/bindings/StatusChoice.ts';
 	import type { SubscriptionDetail } from '#lib/bindings/SubscriptionDetail.ts';
 	import type { Unit } from '#lib/bindings/Unit.ts';
+	import type { EstimateInput } from '#lib/bindings/EstimateInput.ts';
+	import AmountInput from '#lib/components/AmountInput.svelte';
 	import DateInput from '#lib/components/DateInput.svelte';
 	import HistoryList from '#lib/components/HistoryList.svelte';
 	import {
@@ -17,6 +19,7 @@
 		isFree,
 		formatDate,
 		formatMoney,
+		formatPrice,
 		statusChoiceLabels
 	} from '#lib/format.ts';
 
@@ -36,6 +39,7 @@
 	let planForm = $state<{
 		from: string;
 		amount: string;
+		estimate: EstimateInput | null;
 		every: number;
 		unit: Unit;
 		nextPayment: string;
@@ -92,6 +96,13 @@
 		planForm = {
 			from: detail.today,
 			amount: sub.price.amount,
+			estimate: sub.estimate
+				? {
+						low: sub.estimate.low?.amount ?? '',
+						high: sub.estimate.high?.amount ?? '',
+						expected: sub.estimate.expected
+					}
+				: null,
 			every: sub.billing.every,
 			unit: sub.billing.unit,
 			nextPayment: sub.nextPayment ?? detail.today
@@ -200,7 +211,7 @@
 							<span>
 								{isFree(plan.price)
 									? 'Free: no payments'
-									: `${formatMoney(plan.price, locale)} · ${describeBilling(plan.billing, plan.anchor, locale)}`}
+									: `${formatPrice(plan.price, plan.estimate, locale)} · ${describeBilling(plan.billing, plan.anchor, locale)}`}
 							</span>
 						</li>
 					{/each}
@@ -216,10 +227,12 @@
 							required
 							today={detail.today}
 						/>
-						<label>
-							Price per payment ({sub.price.currency})
-							<input bind:value={planForm.amount} required inputmode="decimal" autocomplete="off" />
-						</label>
+						<AmountInput
+							bind:amount={planForm.amount}
+							bind:estimate={planForm.estimate}
+							currency={sub.price.currency}
+							label="Price per payment ({sub.price.currency})"
+						/>
 						<fieldset>
 							<legend>Billed every</legend>
 							<div class="row">
