@@ -5,7 +5,7 @@ Where the project stands, what has been decided since the
 end of each piece of work. Design decisions and their reasons are in
 [DECISIONS.md](DECISIONS.md).
 
-Last updated: 2026-11-05.
+Last updated: 2026-11-06.
 
 ## Milestone 1
 
@@ -20,9 +20,8 @@ Everything except the iOS half of criterion 2 is done (2026-11-03), along with
 much that went beyond the milestone: editing, notes, history and restore,
 exchange rates and favourite currencies, and CI.
 
-Not yet checked: phone-width layouts on a real
-device, how the app gets today's date in the device's time zone on iOS, and the
-document picker on iOS (desktop uses GTK file dialogs).
+Not yet checked on iOS: how the app gets today's date in the device's time zone,
+and the document picker (desktop uses GTK file dialogs).
 
 ## Changes to the specification
 
@@ -91,6 +90,14 @@ design, DECISIONS.md has the details.
   rates for currencies the ECB doesn't publish. The total is shown in the
   reporting currency by default and can be switched to any other currency.
 
+**2026-11-04**
+
+- **Reminders are in**, ahead of the specification, which lists them as a later
+  feature and notifications as out of scope. Its testing bar still applies (see
+  "Reminders" below).
+- **Releases**: pushing a version tag publishes a GitHub Release with the
+  binaries.
+
 ## Milestone 2: finish the MVP dashboard
 
 Agreed 2026-11-03.
@@ -100,10 +107,10 @@ Agreed 2026-11-03.
 | Upcoming payments | Done: next 30 days, or 90, grouped by day, each in its own currency. |
 | Monthly chart: scheduled cash flow vs monthly-equivalent commitment, kept separate | Done: columns and a line on one axis, six months back to six ahead, in the dashboard's currency, with hover details and a table view. |
 
-Checked at phone width (360 px) and in dark mode in a browser; not yet on a
-real phone.
+Done, in v0.2.0, apart from the chart table below. Checked at phone width
+(360 px) and in dark mode in a browser, and in the Android emulator.
 
-**Feedback from 2026-11-04**, in progress:
+**Feedback from 2026-11-04:**
 
 - ~~Notes when adding a subscription~~ (done).
 - ~~Tabs~~ (done): Overview, Subscriptions and More, a bar at the bottom on
@@ -116,94 +123,89 @@ real phone.
 - Later, once the user decides what they want: a clearer monthly chart table,
   especially for the current month (part paid, part still due).
 
-**Reminders** (agreed 2026-11-04; built for Android, not released; see
-DECISIONS.md, "Reminders"): notifications before payments due, separate bills,
-free trials ending and price changes, at one or more lead times (default 1 day
-before at 09:00), set on a Reminders screen under More, which also asks for
-permission. The settings are in the database and in backups (format version 5).
-Desktop shows the settings but doesn't schedule, and iOS comes later.
+## Milestone 3: platforms
+
+Proposed and agreed 2026-11-03. Everything is built; what's left is mostly
+trying it on real devices.
+
+| Item | Status |
+|---|---|
+| Nix package | Done: `nix run github:nicolasdumitru/epicycle`, or in the system configuration (see the README). CI builds it. |
+| Android | Builds in CI: a signed release APK on every push and every release. Works in a Pixel 10 emulator, where start-up, exchange rates, safe areas and the keyboard needed fixes. Testers have it; nothing recorded yet from a real phone. |
+| Windows | Builds in CI: tests and installers (unsigned, so SmartScreen warns) on every push and every release. Not yet tried on a Windows PC; the user will. |
+| iOS | Builds for the simulator in CI. Not yet installed on an iPhone: paused until a friend's Mac is available (see "Open questions"). |
+| Releases | Pushing a version tag publishes the Android APK and the Windows installers. v0.1.0; v0.2.0 (2026-11-04: tabs, notes when adding, estimated amounts and ranges, due dates, single-payment changes, what's left to pay); v0.3.0 (2026-11-06: reminders on Android). |
+| Emulator tooling | `just android-run` builds the current code and opens it on the emulator, starting one if needed. Also `just android-install` and `just android-reboot`. |
+| Specification's platform checklist | Partly done. Phone layouts and safe areas are fixed on Android. Still to check on real devices: back navigation with the tabs, touch and keyboard behaviour, and above all backup export and import through the system file picker, which hasn't been tried on any phone. |
+
+## Reminders
+
+Agreed 2026-11-04, released in v0.3.0 for Android; see DECISIONS.md, "Reminders".
+Notifications before payments due, separate bills, free trials ending and price
+changes, at one or more lead times (default 1 day before at 09:00), set on a
+Reminders screen under More, which also asks for permission. The settings are in
+the database and in backups (format version 5). Desktop shows the settings but
+doesn't schedule, and iOS comes later.
 
 The specification asks for real devices and release builds; so far this has only
-run as a debug build in the emulator (2026-11-05):
+run as a debug build in the emulator (2026-11-05 and 06):
 
 - Works: the permission prompt, scheduling, delivery (inexact, within a few
   minutes), delivery after a reboot without opening the app, tapping a
-  notification to open the app, and rescheduling after changing the settings,
-  deleting a subscription or turning reminders off. Fixed on the way: reminders
-  were lost at a reboot and stale ones weren't cancelled.
-- Not tried: time zone and daylight-saving changes, permission denied and
-  granted later, battery optimisation, and phones from other makers.
+  notification to open the app, rescheduling after changing the settings,
+  deleting a subscription or turning reminders off, and allowing notifications
+  in the phone's settings and coming back to the app. Fixed on the way: reminders
+  were lost at a reboot, stale ones weren't cancelled, and allowing notifications
+  in the phone's settings went unnoticed.
+- Not tried: time zone and daylight-saving changes, battery optimisation, and
+  phones from other makers.
 - Known limit: reminders cover 60 days ahead and are only renewed while the app
-  runs. Agreed (2026-11-06): a background job (WorkManager) to renew them with
-  the app closed, once the release has been tried on real phones.
+  runs. A background job will fix this (see "Next steps").
 
 ## Next steps
 
-Agreed order for the rest of milestone 1 (2026-11-03):
+1. **Try v0.3.0 on real Android phones**: reminders, including on other makers'
+   phones, and the rest of the platform checklist, especially backups through
+   the file picker.
+2. **Background job for reminders** (agreed 2026-11-06, after step 1): WorkManager,
+   to renew reminders with the app closed. Needs the Rust logic and the database
+   to run without the app's window.
+3. **Try the Windows installers** on a PC (the user).
 
-1. ~~Currency and date inputs~~ (done).
-2. ~~Editing subscriptions with notes~~ (done): each subscription has its own
-   screen for name, notes, price or billing changes from a date, pausing,
-   resuming, cancelling and deleting.
-3. ~~History view~~ (done): on each subscription's screen, with restore; a
-   screen for deleted subscriptions; the two Replace modes.
-4. ~~Exchange rates and the converted total~~ (done): ECB rates fetched when
-   online, manual rates on an "Exchange rates" screen, and the dashboard total in
-   any currency, with the rates it used and their age.
+Agreed, without a date:
 
-5. ~~Favourite currencies~~ (done, 2026-11-03): one-tap chips on the dashboard
-   total and in the add form, starred from the dashboard; backed up with manual
-   exchange rates in backup format version 3.
-6. ~~Hourly exchange rate refresh~~ (done): in the background while the app runs.
-8. **Android build** (2026-11-03, in progress): the Android dev shell, the
-   Android project and release signing are done, and a release APK builds
-   locally. CI (`.github/workflows/android.yml`) hasn't run yet, and the release
-   key doesn't exist yet: the user creates it with `just android-keystore` and
-   adds the GitHub secrets it prints. Runs in the emulator (2026-11-03):
-   start-up and exchange rates needed Android fixes, now done. Not yet tried on
-   a real phone; a friend will. Fixed after testing in a Pixel 10 emulator:
-   the page drew under the status bar, gesture bar and keyboard (Android's
-   WebView doesn't report safe-area insets to CSS, so the activity now pads the
-   content); the currency list ran off the left of the screen; the empty chart
-   showed a bare axis.
-9. **Windows build in CI** (2026-11-03, hasn't run yet):
-   `.github/workflows/windows.yml` runs the Rust tests on Windows and builds the
-   installers (unsigned, so SmartScreen warns). The user will test them on a
-   Windows PC. A likely snag is building the TLS library (`aws-lc-rs`).
-10. **Releases** (2026-11-04): pushing a version tag publishes a GitHub Release
-    with the signed Android APK and the Windows installers. Releases: v0.1.0;
-    v0.2.0 (2026-11-04: tabs, notes when adding, estimated amounts and
-    ranges, due dates, single-payment changes, what's left to pay); v0.3.0
-    (2026-11-06: reminders on Android).
-7. ~~Nix package~~ (done): `nix run github:nicolasdumitru/epicycle`, or in the
-   system configuration (see the README). CI builds it.
+- **A clearer monthly chart table**, especially for the current month (part paid,
+  part still due), once the user decides what they want.
+- **The expected amount estimated from past payments.** One-off changes already
+  record what was actually paid, which is what it needs.
+- **A settings screen**: the default reporting currency, which for now changes
+  from the dashboard ("Always show totals in …"), and a default folder for
+  backups, which start in Downloads on every platform for now.
+- **iOS**: install on an iPhone with a friend's Mac, then go through the
+  platform checklist there, including the document picker for backups.
+  Reminders on iOS follow from that.
+- **Reminders on desktop**: only while the app runs, since the plugin can't
+  schedule there.
 
-Agreed, for when there is a settings screen:
+Mentioned by the user, not yet planned:
 
-- **Default reporting currency**: for now it changes from the dashboard
-  ("Always show totals in …").
-- **Default folder for backups**: exports start in Downloads on every platform
-  (since 2026-11-03); a setting will let the user choose another folder.
+- **Markdown in notes**, which are plain text for now.
+- **A directory of test data** in the repository.
+- **Dropping old backup formats** once the format matures.
 
-Later, not yet agreed:
+From the specification's later features, not started:
 
-- **iOS build**: find a Mac (for example a remote build service), then go through
-  the specification's platform validation checklist on a real iPhone, including
-  the document picker for backups.
-- **Upcoming payments** list and the **monthly chart** (scheduled cash flow vs
-  monthly-equivalent commitment, kept visibly separate).
+- Historical spending trends and price-history views.
+- Richer analytics: selectable periods, per-category breakdowns, monthly and
+  quarterly averages. The averages exist in `crates/core`, with no screen yet.
+- Integration with other personal finance tools.
+- Optional sync across devices (see "Open questions").
 
 ## Open questions
 
-- **iOS builds in CI** (2026-11-03). Step 1 is in `.github/workflows/ios.yml`
-  and hasn't run yet: the Rust code built for iPhone and simulator, and the
-  whole app built for the simulator through Tauri's generated Xcode project. No
-  Mac is needed: the Xcode project (`crates/app/gen/apple`) is generated on
-  GitHub's macOS runner, free for this public repository, and uploaded as an
-  artifact. It may be committed later, as Tauri suggests.
-  Step 2, open (2026-11-03): the user wants cloud builds installed through
-  TestFlight, without third-party tools such as SideStore. TestFlight needs the
-  paid Apple Developer Program; a free Apple ID can't upload builds. Waiting on
-  whether to join it.
-
+- **Getting Epicycle onto an iPhone** (2026-11-03). CI builds for the simulator,
+  with the Xcode project generated on GitHub's macOS runner. The user wants
+  no third-party tools such as SideStore and won't pay for the Apple Developer
+  Program, which TestFlight needs. iOS is paused until a friend's Mac is
+  available; the friend's developer account may also help.
 - Sync through cloud drives: if wanted, when, and which providers first?
