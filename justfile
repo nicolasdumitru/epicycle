@@ -40,6 +40,10 @@ android-run *args:
 android-install:
     nix develop .#android --command python3 scripts/android_run.py --running
 
+# Run JavaScript in the open app and print the result (debug builds only).
+android-eval script:
+    nix develop .#android --command python3 scripts/android_eval.py {{quote(script)}}
+
 # Restart the running emulator or connected phone, e.g. to check that reminders
 # survive it.
 android-reboot:
