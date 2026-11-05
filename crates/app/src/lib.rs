@@ -11,9 +11,12 @@ use crate::db::{Db, DbHandle};
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_notification::init());
+    #[cfg(target_os = "android")]
+    let builder = builder.plugin(notifications::android_plugin());
+    builder
         // Registered before the database is open; see DbHandle.
         .manage(DbHandle::default())
         .setup(|app| {
@@ -22,7 +25,7 @@ pub fn run() {
             let db = tauri::async_runtime::block_on(Db::open(&dir.join("epicycle.sqlite3")))?;
             app.state::<DbHandle>().set(db);
             rates::spawn_refresher(app.handle().clone());
-            // Schedules reminders now and after every change (mobile only).
+            // Schedules reminders now and after every change (Android only).
             let rescheduler = notifications::spawn(app.handle().clone());
             app.manage(rescheduler);
             Ok(())

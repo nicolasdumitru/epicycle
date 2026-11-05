@@ -3,8 +3,8 @@
 //! The core works out which reminders are due (`epicycle_core::reminders`);
 //! here a background task replaces the scheduled notifications with them
 //! whenever something changes, and every few hours as time passes. Only on
-//! mobile: on desktop the notification plugin can't schedule (see
-//! docs/DECISIONS.md, "Reminders").
+//! Android for now: on desktop the notification plugin can't schedule, and iOS
+//! hasn't been tried (see docs/DECISIONS.md, "Reminders").
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -201,7 +201,9 @@ pub fn spawn(app: AppHandle) -> Rescheduler {
     tauri::async_runtime::spawn(async move {
         loop {
             // Failures (e.g. permission revoked) are retried next time.
-            let _ = reschedule(&app).await;
+            if let Err(error) = reschedule(&app).await {
+                eprintln!("Couldn't schedule reminders: {error}");
+            }
             tokio::select! {
                 _ = signal.notified() => {}
                 _ = tokio::time::sleep(EVERY) => {}
@@ -211,7 +213,49 @@ pub fn spawn(app: AppHandle) -> Rescheduler {
     rescheduler
 }
 
-#[cfg(mobile)]
+/// A reminder as the Android plugin takes it, with `sourceJson` filled in.
+///
+/// The plugin saves each notification's `sourceJson` to restore it after a
+/// reboot, and to know what is pending, but never fills it in itself (2.8.0):
+/// it has to come with the notification, as the notification's own JSON.
+#[cfg(any(target_os = "android", test))]
+fn batch_entry(
+    id: i32,
+    title: String,
+    body: String,
+    schedule: tauri_plugin_notification::Schedule,
+) -> Result<serde_json::Value, serde_json::Error> {
+    let mut entry = serde_json::json!({
+        "id": id,
+        "title": title,
+        "body": body,
+        "schedule": serde_json::to_value(schedule)?,
+    });
+    entry["sourceJson"] = entry.to_string().into();
+    Ok(entry)
+}
+
+/// The Android side of the notification plugin, for its `batch` command: only
+/// that one saves notifications, and the plugin's Rust API only offers `show`,
+/// which sets the alarm without saving it. Unsaved reminders are lost at a
+/// reboot and can't be cancelled.
+#[cfg(target_os = "android")]
+struct AndroidNotifications(tauri::plugin::PluginHandle<tauri::Wry>);
+
+/// A second, private instance of the plugin's Android class, for that handle.
+#[cfg(target_os = "android")]
+pub fn android_plugin() -> tauri::plugin::TauriPlugin<tauri::Wry> {
+    tauri::plugin::Builder::new("epicycle-notifications")
+        .setup(|app, api| {
+            let handle =
+                api.register_android_plugin("app.tauri.notification", "NotificationPlugin")?;
+            app.manage(AndroidNotifications(handle));
+            Ok(())
+        })
+        .build()
+}
+
+#[cfg(target_os = "android")]
 async fn reschedule(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     use tauri_plugin_notification::{NotificationExt, PermissionState, Schedule};
 
@@ -232,31 +276,36 @@ async fn reschedule(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
         AT_MOST,
     );
 
-    // Only this app's own reminders are ever pending, so replace them all.
-    let pending: Vec<i32> = notifications.pending()?.iter().map(|p| p.id()).collect();
-    if !pending.is_empty() {
-        notifications.cancel(pending)?;
-    }
-    for r in due {
-        let at = r.at.to_zoned(now.time_zone().clone())?.timestamp();
-        let (title, body) = text(&r);
-        notifications
-            .builder()
-            .id(r.id())
-            .title(title)
-            .body(body)
-            .schedule(Schedule::At {
+    let entries = due
+        .iter()
+        .map(|r| {
+            let at = r.at.to_zoned(now.time_zone().clone())?.timestamp();
+            let (title, body) = text(r);
+            let schedule = Schedule::At {
                 date: time::OffsetDateTime::from_unix_timestamp(at.as_second())?,
                 repeating: false,
                 // Fire even while the phone dozes.
                 allow_while_idle: true,
-            })
-            .show()?;
+            };
+            Ok(batch_entry(r.id(), title, body, schedule)?)
+        })
+        .collect::<Result<Vec<_>, Box<dyn std::error::Error>>>()?;
+
+    // Only this app's own reminders are ever saved, so replace them all. An
+    // empty object cancels every saved one; the plugin's `cancel_all` sends
+    // null, which its Android side can't parse (2.8.0).
+    let plugin = &app.state::<AndroidNotifications>().0;
+    plugin.run_mobile_plugin::<()>("cancel", serde_json::json!({}))?;
+    if !entries.is_empty() {
+        plugin.run_mobile_plugin::<serde_json::Value>(
+            "batch",
+            serde_json::json!({ "notifications": entries }),
+        )?;
     }
     Ok(())
 }
 
-#[cfg(desktop)]
+#[cfg(not(target_os = "android"))]
 async fn reschedule(_app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
@@ -293,6 +342,24 @@ mod tests {
         assert!(settings_of(&entered(vec![1], "8.30")).is_err());
         assert!(settings_of(&entered(vec![400], "09:00")).is_err());
         assert!(settings_of(&entered(vec![1, 2, 3, 4, 5, 6], "09:00")).is_err());
+    }
+
+    #[test]
+    fn batch_entries_carry_their_own_json() {
+        let date = time::OffsetDateTime::from_unix_timestamp(1_800_000_000).unwrap();
+        let schedule = tauri_plugin_notification::Schedule::At {
+            date,
+            repeating: false,
+            allow_while_idle: true,
+        };
+        let mut entry = batch_entry(7, "Vodafone".into(), "Due".into(), schedule).unwrap();
+        let source = entry["sourceJson"].as_str().unwrap().to_owned();
+        entry.as_object_mut().unwrap().remove("sourceJson");
+        assert_eq!(
+            serde_json::from_str::<serde_json::Value>(&source).unwrap(),
+            entry
+        );
+        assert_eq!(entry["schedule"]["at"]["allowWhileIdle"], true);
     }
 
     #[test]

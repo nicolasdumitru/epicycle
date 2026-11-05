@@ -217,12 +217,23 @@ the snapshot and backup format versions go up, and old files keep reading.
   step with it: at start-up and after every change it cancels the reminders
   it scheduled and schedules the coming ones (60 days ahead, at most 60), each
   with an ID derived from what it's about, so rescheduling never duplicates.
-- **Android first**, with the official notification plugin: it restores
-  scheduled notifications after a reboot, fires while the phone dozes, and
-  without exact-alarm permission falls back to inexact alarms (possibly some
-  minutes late, fine for reminders; no special permission needed). Desktop
-  shows notifications only immediately, so it gets no scheduled reminders
-  yet; iOS follows when it can be tested.
+- **Android first**, with the official notification plugin: it fires while the
+  phone dozes, and without exact-alarm permission falls back to inexact alarms
+  (possibly some minutes late, fine for reminders; no special permission
+  needed). Desktop shows notifications only immediately, so it gets no
+  scheduled reminders yet; iOS follows when it can be tested.
+- **Working around the plugin on Android** (2.8.0, found 2026-11-05): restoring
+  after a reboot and cancelling depend on the notifications it saves, and three
+  things stop that working. Its Rust API only offers `show`, which doesn't save;
+  `batch` does, but saves a `sourceJson` field nothing fills in; and `cancel_all`
+  sends null, which its Android side can't parse. So the app registers the
+  plugin's Android class a second time under a small plugin of its own, for a
+  handle that reaches `batch`, sends each notification's JSON as its
+  `sourceJson`, and cancels with an empty object. It's a few lines against
+  forking the plugin, but relies on its internals: after updating the plugin,
+  check that reminders survive a reboot and that `just android-run` still
+  schedules them. Failures are printed to the log (`Couldn't schedule
+  reminders`).
 - **Settings** are with the others: in the database and in backups (format
   version 5).
 
