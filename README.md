@@ -84,6 +84,9 @@ Android work uses a second dev shell with the Android SDK and NDK added:
 `nix develop .#android`. The `just` commands below enter it themselves.
 
 ```sh
+just android-run       # build and open on the emulator, starting one if needed
+just android-install   # build and open on the running emulator or connected phone
+just android-reboot    # restart it, e.g. to check that reminders survive that
 just android-debug     # debug APK, for this machine's own testing
 just android-release   # release APK (signed once a key is set up)
 just android-emulator  # start a virtual Pixel 10 (Android 16), then:
