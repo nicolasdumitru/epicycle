@@ -133,9 +133,9 @@ run as a debug build in the emulator (2026-11-05):
   were lost at a reboot and stale ones weren't cancelled.
 - Not tried: time zone and daylight-saving changes, permission denied and
   granted later, battery optimisation, and phones from other makers.
-- Known limits: reminders cover 60 days ahead and are only renewed while the app
-  runs, and after allowing notifications in the phone's settings nothing is
-  scheduled until the app next starts or its 6-hourly refresh.
+- Known limit: reminders cover 60 days ahead and are only renewed while the app
+  runs. Agreed (2026-11-06): a background job (WorkManager) to renew them with
+  the app closed, once the release has been tried on real phones.
 
 ## Next steps
 
@@ -173,7 +173,8 @@ Agreed order for the rest of milestone 1 (2026-11-03):
 10. **Releases** (2026-11-04): pushing a version tag publishes a GitHub Release
     with the signed Android APK and the Windows installers. Releases: v0.1.0;
     v0.2.0 (2026-11-04: tabs, notes when adding, estimated amounts and
-    ranges, due dates, single-payment changes, what's left to pay).
+    ranges, due dates, single-payment changes, what's left to pay); v0.3.0
+    (2026-11-06: reminders on Android).
 7. ~~Nix package~~ (done): `nix run github:nicolasdumitru/epicycle`, or in the
    system configuration (see the README). CI builds it.
 

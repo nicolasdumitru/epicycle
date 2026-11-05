@@ -37,7 +37,8 @@ warns before running them.
 
 ## Making a release
 
-1. Set the new version in `Cargo.toml` (`workspace.package.version`) and
+1. Set the new version in `Cargo.toml` (`workspace.package.version`),
+   `crates/app/Cargo.toml` (the `epicycle-core` dependency) and
    `crates/app/tauri.conf.json` (`version`). It must go up: Android doesn't
    install an update with a lower version.
 2. Check it, commit, and tag:
