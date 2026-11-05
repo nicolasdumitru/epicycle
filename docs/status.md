@@ -5,7 +5,7 @@ Where the project stands, what has been decided since the
 end of each piece of work. Design decisions and their reasons are in
 [DECISIONS.md](DECISIONS.md).
 
-Last updated: 2026-11-03.
+Last updated: 2026-11-05.
 
 ## Milestone 1
 
@@ -116,15 +116,26 @@ real phone.
 - Later, once the user decides what they want: a clearer monthly chart table,
   especially for the current month (part paid, part still due).
 
-**Reminders** (agreed 2026-11-04, done on Android; see DECISIONS.md,
-"Reminders"): notifications before payments due, separate bills, free trials
-ending and price changes, at one or more lead times (default 1 day before at
-09:00), set on a Reminders screen under More, which also asks for permission.
-The settings are in the database and in backups (format version 5). Tested
-in the Pixel 10 emulator: the permission prompt, scheduling (inexact alarms,
-within a few minutes) and the notifications themselves. Desktop shows the
-settings but doesn't schedule, and iOS comes later. Not yet tried on a real
-phone, or across a reboot (the plugin restores alarms at boot).
+**Reminders** (agreed 2026-11-04; built for Android, not released; see
+DECISIONS.md, "Reminders"): notifications before payments due, separate bills,
+free trials ending and price changes, at one or more lead times (default 1 day
+before at 09:00), set on a Reminders screen under More, which also asks for
+permission. The settings are in the database and in backups (format version 5).
+Desktop shows the settings but doesn't schedule, and iOS comes later.
+
+The specification asks for real devices and release builds; so far this has only
+run as a debug build in the emulator (2026-11-05):
+
+- Works: the permission prompt, scheduling, delivery (inexact, within a few
+  minutes), delivery after a reboot without opening the app, tapping a
+  notification to open the app, and rescheduling after changing the settings,
+  deleting a subscription or turning reminders off. Fixed on the way: reminders
+  were lost at a reboot and stale ones weren't cancelled.
+- Not tried: time zone and daylight-saving changes, permission denied and
+  granted later, battery optimisation, and phones from other makers.
+- Known limits: reminders cover 60 days ahead and are only renewed while the app
+  runs, and after allowing notifications in the phone's settings nothing is
+  scheduled until the app next starts or its 6-hourly refresh.
 
 ## Next steps
 
