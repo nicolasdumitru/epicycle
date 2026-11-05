@@ -38,6 +38,16 @@
 		}
 	});
 
+	// Notifications may have been turned on or off in the phone's settings.
+	async function refreshAccess() {
+		if (document.visibilityState !== 'visible') return;
+		try {
+			access = await getNotificationAccess();
+		} catch (e) {
+			error = String(e);
+		}
+	}
+
 	function label(days: number): string {
 		if (days === 0) return 'On the day';
 		return days === 1 ? '1 day before' : `${days} days before`;
@@ -82,6 +92,8 @@
 		}
 	}
 </script>
+
+<svelte:document onvisibilitychange={refreshAccess} />
 
 <main>
 	<nav>
