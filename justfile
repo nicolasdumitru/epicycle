@@ -30,10 +30,25 @@ deps:
 # Android commands run in the Android dev shell (nix develop .#android), so
 # they work from the default shell too. APKs are for 64-bit ARM phones.
 
+# Build the current code and open it on the emulator, starting one if needed.
+# Arguments go to the emulator. Needs KVM.
+android-run *args:
+    nix develop .#android --command python3 scripts/android_run.py {{args}}
+
+# Build, install and open on the running emulator or connected phone, keeping
+# the app's data.
+android-install:
+    nix develop .#android --command python3 scripts/android_run.py --running
+
+# Restart the running emulator or connected phone, e.g. to check that reminders
+# survive it.
+android-reboot:
+    nix develop .#android --command adb reboot
+
 # Start the Android emulator (a virtual Pixel 10 with Android 16), then use
-# `just android-dev` in another terminal. Needs KVM.
-android-emulator:
-    nix run .#android-emulator
+# `just android-dev` in another terminal. Arguments go to the emulator. Needs KVM.
+android-emulator *args:
+    nix run .#android-emulator -- {{args}}
 
 # Run on a connected Android phone (USB debugging on) or a running emulator.
 android-dev:
