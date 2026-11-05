@@ -16,6 +16,14 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init());
     #[cfg(target_os = "android")]
     let builder = builder.plugin(notifications::android_plugin());
+    // Coming back to the app, perhaps from allowing notifications in the phone's
+    // settings, which nothing else tells it about.
+    #[cfg(mobile)]
+    let builder = builder.on_window_event(|window, event| {
+        if matches!(event, tauri::WindowEvent::Resumed) {
+            notifications::changed(window.app_handle());
+        }
+    });
     builder
         // Registered before the database is open; see DbHandle.
         .manage(DbHandle::default())
