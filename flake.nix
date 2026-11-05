@@ -71,7 +71,8 @@
           sqlx-cli
 
           # Scripts and the task runner (see justfile)
-          python3
+          # websocket-client is for scripts/android_eval.py.
+          (python3.withPackages (p: [ p.websocket-client ]))
           just
 
           # Nix

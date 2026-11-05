@@ -135,7 +135,7 @@ trying it on real devices.
 | Windows | Builds in CI: tests and installers (unsigned, so SmartScreen warns) on every push and every release. Not yet tried on a Windows PC; the user will. |
 | iOS | Builds for the simulator in CI. Not yet installed on an iPhone: paused until a friend's Mac is available (see "Open questions"). |
 | Releases | Pushing a version tag publishes the Android APK and the Windows installers. v0.1.0; v0.2.0 (2026-11-04: tabs, notes when adding, estimated amounts and ranges, due dates, single-payment changes, what's left to pay); v0.3.0 (2026-11-06: reminders on Android). |
-| Emulator tooling | `just android-run` builds the current code and opens it on the emulator, starting one if needed. Also `just android-install` and `just android-reboot`. |
+| Emulator tooling | `just android-run` builds the current code and opens it on the emulator, starting one if needed. Also `just android-install`, `just android-reboot` and `just android-eval`. |
 | Specification's platform checklist | Partly done. Phone layouts and safe areas are fixed on Android. Still to check on real devices: back navigation with the tabs, touch and keyboard behaviour, and above all backup export and import through the system file picker, which hasn't been tried on any phone. |
 
 ## Reminders
