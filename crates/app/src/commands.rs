@@ -2019,7 +2019,32 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
+    /// Phones name the chosen file with a URL, and desktops with a path, which
+    /// on Windows starts with what could pass for a URL's scheme.
+    #[test]
+    fn a_chosen_file_is_a_url_on_phones_and_a_path_on_desktop() {
+        for url in [
+            "file:///private/var/mobile/tmp/app.epicycle-Inbox/epicycle-backup%202.json",
+            "content://com.android.providers.downloads.documents/document/msf%3A33",
+        ] {
+            assert!(matches!(location(url), FilePath::Url(_)), "{url}");
+        }
+        for path in [
+            "/home/ana/Downloads/epicycle-backup 2.json",
+            r"C:\Users\Ana\Downloads\epicycle-backup.json",
+            "epicycle-backup.json",
+        ] {
+            assert!(matches!(location(path), FilePath::Path(_)), "{path}");
+        }
+    }
+
     /// A mock app with the fs plugin, as `run` registers it.
+    ///
+    /// Not on Windows: a program that builds a Tauri app needs the application
+    /// manifest that tauri-build embeds in the app itself but not in test
+    /// programs, which fail to start without it (STATUS_ENTRYPOINT_NOT_FOUND).
+    /// Windows dialogs return paths, which the tests above cover there.
+    #[cfg(not(windows))]
     fn app_with_fs() -> tauri::App<tauri::test::MockRuntime> {
         tauri::test::mock_builder()
             .plugin(tauri_plugin_fs::init())
@@ -2027,9 +2052,10 @@ mod tests {
             .expect("a mock app")
     }
 
-    /// Phones name the chosen file with a URL. On iOS it is a copy such as
+    /// On iOS the chosen file is a copy such as
     /// `file:///…/tmp/app.epicycle-Inbox/epicycle-backup%202.json`, and taking
     /// that for a path made every import fail with "No such file or directory".
+    #[cfg(not(windows))]
     #[test]
     fn backups_are_read_and_written_at_file_urls_and_paths() {
         const V5: &str = include_str!("../../core/testdata/backup-v5.json");
