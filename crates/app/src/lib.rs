@@ -13,6 +13,9 @@ use crate::db::{Db, DbHandle};
 pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        // Opens what the dialogs return on phones; see commands::location. Used
+        // from Rust only, so the UI is given none of its commands.
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_notification::init());
     #[cfg(target_os = "android")]
     let builder = builder.plugin(notifications::android_plugin());

@@ -5,7 +5,7 @@
 	import type { ImportMode } from '#lib/bindings/ImportMode.ts';
 	import type { ImportSummary } from '#lib/bindings/ImportSummary.ts';
 	import type { Overview } from '#lib/bindings/Overview.ts';
-	import { backupFileName, describeConflict, describeImport } from '#lib/format.ts';
+	import { backupFileName, describeConflict, describeImport, fileNameOf } from '#lib/format.ts';
 	import ConfirmDestructive from './ConfirmDestructive.svelte';
 
 	let { onImported }: { onImported: (overview: Overview) => void } = $props();
@@ -25,10 +25,6 @@
 	$effect(() => {
 		if (pending) panel?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 	});
-
-	function fileName(path: string): string {
-		return path.split(/[\\/]/).pop() ?? path;
-	}
 
 	// Runs an action, showing its error if it fails.
 	async function run(action: () => Promise<void>) {
@@ -61,7 +57,7 @@
 			const path = await save({ defaultPath: await defaultExportPath(), filters });
 			if (!path) return;
 			await exportBackup(path);
-			message = `Saved ${fileName(path)}.`;
+			message = `Saved ${fileNameOf(path)}.`;
 		});
 
 	const chooseFile = () =>
@@ -106,7 +102,7 @@
 
 	{#if pending}
 		<div class="panel" bind:this={panel}>
-			<h3>Import {fileName(pending.path)}</h3>
+			<h3>Import {fileNameOf(pending.path)}</h3>
 			<fieldset>
 				<legend>How to import</legend>
 				<label>
@@ -195,7 +191,7 @@
 			onCancel={() => (confirmingWipe = false)}
 		>
 			<p>
-				Everything on this device will be replaced by <strong>{fileName(pending.path)}</strong>,
+				Everything on this device will be replaced by <strong>{fileNameOf(pending.path)}</strong>,
 				including the history of every change.
 			</p>
 			<ul>

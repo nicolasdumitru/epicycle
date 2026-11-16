@@ -5,7 +5,7 @@ Where the project stands, what has been decided since the
 end of each piece of work. Design decisions and their reasons are in
 [DECISIONS.md](DECISIONS.md).
 
-Last updated: 2026-11-06.
+Last updated: 2026-11-16.
 
 ## Milestone 1
 
@@ -20,8 +20,8 @@ Everything except the iOS half of criterion 2 is done (2026-11-03), along with
 much that went beyond the milestone: editing, notes, history and restore,
 exchange rates and favourite currencies, and CI.
 
-Not yet checked on iOS: how the app gets today's date in the device's time zone,
-and the document picker (desktop uses GTK file dialogs).
+Not yet checked on iOS: how the app gets today's date in the device's time zone.
+The document picker has been tried; see "Backups on phones".
 
 ## Changes to the specification
 
@@ -133,7 +133,7 @@ trying it on real devices.
 | Nix package | Done: `nix run github:nicolasdumitru/epicycle`, or in the system configuration (see the README). CI builds it. |
 | Android | Builds in CI: a signed release APK on every push and every release. Works in a Pixel 10 emulator, where start-up, exchange rates, safe areas and the keyboard needed fixes. Testers have it; nothing recorded yet from a real phone. |
 | Windows | Builds in CI: tests and installers (unsigned, so SmartScreen warns) on every push and every release. Not yet tried on a Windows PC; the user will. |
-| iOS | Builds for the simulator in CI. Not yet installed on an iPhone: paused until a friend's Mac is available (see "Open questions"). |
+| iOS | Builds for the simulator in CI. Installed on an iPhone by the user (2026-11-16); importing a backup failed there and is fixed but not yet retried (see "Backups on phones"). |
 | Releases | Pushing a version tag publishes the Android APK and the Windows installers. v0.1.0; v0.2.0 (2026-11-04: tabs, notes when adding, estimated amounts and ranges, due dates, single-payment changes, what's left to pay); v0.3.0 (2026-11-06: reminders on Android). |
 | Emulator tooling | `just android-run` builds the current code and opens it on the emulator, starting one if needed. Also `just android-install`, `just android-reboot` and `just android-eval`. |
 | Specification's platform checklist | Partly done. Phone layouts and safe areas are fixed on Android. Still to check on real devices: back navigation with the tabs, touch and keyboard behaviour, and above all backup export and import through the system file picker, which hasn't been tried on any phone. |
@@ -162,6 +162,30 @@ run as a debug build in the emulator (2026-11-05 and 06):
 - Known limit: reminders cover 60 days ahead and are only renewed while the app
   runs. A background job will fix this (see "Next steps").
 
+## Backups on phones
+
+The user installed the app on an iPhone on 2026-11-16, and importing a backup
+failed with "Couldn't read the file: No such file or directory". The file
+dialogs return URLs on phones (`file://` on iOS, `content://` on Android), which
+the app passed to `std::fs` as paths, so the same failure was waiting on Android
+and for exports. Fixed the same day by reading and writing through Tauri's fs
+plugin (see DECISIONS.md, "Backups"); file names shown in the UI are decoded
+from the URL.
+
+Tested on Linux only: a unit test reads and writes a backup at a `file://` URL
+with an encoded space and at a plain path, through the fs plugin in a mock app.
+Not run on any phone yet:
+
+- **iOS import**: should now work; the picker hands over a copy inside the app's
+  own storage.
+- **iOS export**: likely still broken. The dialog plugin exports an empty file
+  and returns its new location for the app to fill in, but Apple documents that
+  location as not writable by the app. If so, the fix is to write the backup
+  into the app's Documents folder before opening the dialog, which then exports
+  that file instead of an empty one.
+- **Android import and export**: through the fs plugin's `content://` support.
+  A file picked from Downloads may show an ID instead of its name.
+
 ## Next steps
 
 1. **Try v0.3.0 on real Android phones**: reminders, including on other makers'
@@ -181,9 +205,9 @@ Agreed, without a date:
 - **A settings screen**: the default reporting currency, which for now changes
   from the dashboard ("Always show totals in …"), and a default folder for
   backups, which start in Downloads on every platform for now.
-- **iOS**: install on an iPhone with a friend's Mac, then go through the
-  platform checklist there, including the document picker for backups.
-  Reminders on iOS follow from that.
+- **iOS**: installed on an iPhone (2026-11-16). Go through the platform
+  checklist there, starting with backups (see "Backups on phones"). Reminders
+  on iOS follow from that.
 - **Reminders on desktop**: only while the app runs, since the plugin can't
   schedule there.
 

@@ -28,6 +28,9 @@ serde_json = "1.0.154"
 sqlx = { version = "0.9.0", default-features = false, features = ["runtime-tokio", "sqlite-bundled", "macros", "migrate"] }
 tauri = { version = "2.12.3", features = [] }
 tauri-plugin-dialog = "2.8.3"
+# Reads and writes the files the dialogs return, which on phones are URLs
+# rather than paths. Already a dependency of the dialog plugin.
+tauri-plugin-fs = "2.7.1"
 # Scheduled reminders on Android (and later iOS); see docs/DECISIONS.md.
 tauri-plugin-notification = "2.8.0"
 # The notification plugin takes its scheduled times in this crate's type.
@@ -46,4 +49,6 @@ uuid = { version = "1.29.0", features = ["v7"] }
 webpki-root-certs = "1.0.11"
 
 [dev-dependencies]
+# A mock app, to test commands that need an app handle.
+tauri = { version = "2.12.3", features = ["test"] }
 tokio = { version = "1.54.1", features = ["macros", "rt"] }

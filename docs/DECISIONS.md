@@ -376,6 +376,14 @@ automatically.
   deleted. The preview counts them, and the confirmation is a modal with a red
   button that stays disabled for 5 seconds (a ring counts down) next to a
   prominent Cancel. Plain Replace stays the non-destructive choice.
+- **Backup files are read and written through Tauri's fs plugin**, from Rust
+  only (the UI is given none of its commands). The file dialogs return a path
+  on desktop, a `file://` URL on iOS and a `content://` URI on Android, and
+  `std::fs` takes a URL for a file name: importing on an iPhone failed with "No
+  such file or directory". On desktop a backup is still written to a temporary
+  file and renamed into place; at a URL it is written directly, since the dialog
+  has already created the file and a document provider has no folder to rename
+  in.
 
 ## Storage
 

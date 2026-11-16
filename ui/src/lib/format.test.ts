@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
 	backupFileName,
+	fileNameOf,
 	describeRange,
 	describePrice,
 	describeRateSource,
@@ -138,6 +139,28 @@ describe('backupFileName', () => {
 		expect(backupFileName(new Date(2026, 10, 3, 9, 5, 7))).toBe(
 			'epicycle-backup-2026-11-03_09-05-07.json'
 		);
+	});
+});
+
+describe('fileNameOf', () => {
+	it('takes the last part of a path', () => {
+		expect(fileNameOf('/home/ana/Downloads/backup 2.json')).toBe('backup 2.json');
+		expect(fileNameOf('C:\\Users\\Ana\\Downloads\\backup%20.json')).toBe('backup%20.json');
+	});
+
+	it('decodes the URLs that phones give', () => {
+		expect(
+			fileNameOf('file:///private/var/mobile/tmp/app.epicycle-Inbox/epicycle-backup%202.json')
+		).toBe('epicycle-backup 2.json');
+		expect(
+			fileNameOf(
+				'content://com.android.externalstorage.documents/document/primary%3ADownload%2Fbackup.json'
+			)
+		).toBe('backup.json');
+	});
+
+	it('shows a URL that is not percent-encoded as it is', () => {
+		expect(fileNameOf('file:///tmp/100%.json')).toBe('100%.json');
 	});
 });
 

@@ -5,6 +5,7 @@
 //! versions of these types are generated into `ui/src/lib/bindings/` by ts-rs
 //! whenever `cargo test` runs.
 
+use std::io::Write;
 use std::num::NonZeroU16;
 use std::path::Path;
 
@@ -20,7 +21,8 @@ use epicycle_core::subscription::{
 };
 use jiff::civil::Date;
 use serde::{Deserialize, Serialize, Serializer};
-use tauri::State;
+use tauri::{AppHandle, Runtime, State};
+use tauri_plugin_fs::{FilePath, FsExt, OpenOptions};
 use ts_rs::TS;
 use uuid::Uuid;
 
@@ -1267,12 +1269,42 @@ pub async fn delete_subscription(
     overview_of(&db.subscriptions().await?, today())
 }
 
+/// Where a file is, as the system's file dialog reports it: a path on desktop,
+/// a `file://` URL on iOS and a `content://` URI on Android. `std::fs` takes a
+/// URL for a file name and finds nothing there, so backups are read and written
+/// through the fs plugin, which opens all three.
+fn location(chosen: &str) -> FilePath {
+    chosen.parse().unwrap_or_else(|never| match never {})
+}
+
 #[tauri::command]
-pub async fn export_backup(db: State<'_, DbHandle>, path: String) -> Result<(), CommandError> {
+pub async fn export_backup(
+    app: tauri::AppHandle,
+    db: State<'_, DbHandle>,
+    path: String,
+) -> Result<(), CommandError> {
     let db = db.ready().await;
     let json = db.export().await?.to_json();
-    write_replacing(Path::new(&path), json.as_bytes())
+    write_backup(&app, &path, json.as_bytes())
         .map_err(|e| CommandError(format!("Couldn't save the backup: {e}")))
+}
+
+fn write_backup<R: Runtime>(
+    app: &AppHandle<R>,
+    chosen: &str,
+    contents: &[u8],
+) -> std::io::Result<()> {
+    match location(chosen) {
+        FilePath::Path(path) => write_replacing(&path, contents),
+        // On phones the dialog has already created the file, and what it names
+        // may not be in a folder at all, so there is nowhere for a temporary
+        // file next to it and nothing to rename over.
+        url @ FilePath::Url(_) => {
+            let mut options = OpenOptions::new();
+            options.write(true).create(true).truncate(true);
+            app.fs().open(url, options)?.write_all(contents)
+        }
+    }
 }
 
 /// Writes a temporary file next to `path` and then renames it, so a failed
@@ -1284,8 +1316,10 @@ fn write_replacing(path: &Path, contents: &[u8]) -> std::io::Result<()> {
     std::fs::rename(&partial, path)
 }
 
-fn read_backup(path: &str) -> Result<Backup, CommandError> {
-    let json = std::fs::read_to_string(path)
+fn read_backup<R: Runtime>(app: &AppHandle<R>, chosen: &str) -> Result<Backup, CommandError> {
+    let json = app
+        .fs()
+        .read_to_string(location(chosen))
         .map_err(|e| CommandError(format!("Couldn't read the file: {e}")))?;
     Ok(Backup::from_json(&json)?)
 }
@@ -1293,12 +1327,13 @@ fn read_backup(path: &str) -> Result<Backup, CommandError> {
 /// What importing the backup at `path` would do, without changing anything.
 #[tauri::command]
 pub async fn preview_import(
+    app: tauri::AppHandle,
     db: State<'_, DbHandle>,
     path: String,
     mode: ImportMode,
 ) -> Result<ImportSummary, CommandError> {
     let db = db.ready().await;
-    let backup = read_backup(&path)?;
+    let backup = read_backup(&app, &path)?;
     Ok(match mode {
         ImportMode::Merge | ImportMode::Replace => {
             let (plan, rates) = db.preview_import(&backup, history_mode(mode)).await?;
@@ -1327,7 +1362,7 @@ pub async fn import_backup(
     mode: ImportMode,
 ) -> Result<Imported, CommandError> {
     let db = db.ready().await;
-    let backup = read_backup(&path)?;
+    let backup = read_backup(&app, &path)?;
     let summary = match mode {
         ImportMode::Merge | ImportMode::Replace => {
             let (plan, rates) = db.import(&backup, history_mode(mode)).await?;
@@ -1980,6 +2015,41 @@ mod tests {
         std::fs::write(&path, "older and longer contents").unwrap();
         write_replacing(&path, b"new").unwrap();
         assert_eq!(std::fs::read_to_string(&path).unwrap(), "new");
+        assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// A mock app with the fs plugin, as `run` registers it.
+    fn app_with_fs() -> tauri::App<tauri::test::MockRuntime> {
+        tauri::test::mock_builder()
+            .plugin(tauri_plugin_fs::init())
+            .build(tauri::test::mock_context(tauri::test::noop_assets()))
+            .expect("a mock app")
+    }
+
+    /// Phones name the chosen file with a URL. On iOS it is a copy such as
+    /// `file:///…/tmp/app.epicycle-Inbox/epicycle-backup%202.json`, and taking
+    /// that for a path made every import fail with "No such file or directory".
+    #[test]
+    fn backups_are_read_and_written_at_file_urls_and_paths() {
+        const V5: &str = include_str!("../../core/testdata/backup-v5.json");
+        let app = app_with_fs();
+        let dir = std::env::temp_dir().join(format!("epicycle test {}", Uuid::now_v7()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("epicycle-backup 2.json");
+        let url = tauri::Url::from_file_path(&path).unwrap().to_string();
+        assert!(url.starts_with("file:///") && url.ends_with("/epicycle-backup%202.json"));
+
+        write_backup(app.handle(), &url, V5.as_bytes()).unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), V5);
+        let backup = read_backup(app.handle(), &url).unwrap();
+        assert_eq!(backup, Backup::from_json(V5).unwrap());
+
+        // Desktop dialogs give plain paths.
+        let plain = path.to_str().unwrap();
+        std::fs::remove_file(&path).unwrap();
+        write_backup(app.handle(), plain, V5.as_bytes()).unwrap();
+        assert_eq!(read_backup(app.handle(), plain).unwrap(), backup);
         assert_eq!(std::fs::read_dir(&dir).unwrap().count(), 1);
         std::fs::remove_dir_all(&dir).unwrap();
     }

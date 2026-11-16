@@ -176,6 +176,24 @@ export function backupFileName(now: Date): string {
 	return `epicycle-backup-${date}_${time}.json`;
 }
 
+/**
+ * The name of a file, from where the system's file dialog says it is: a path
+ * on desktop, a URL on phones, where spaces and the like are percent-encoded.
+ */
+export function fileNameOf(location: string): string {
+	// A scheme of two letters or more, so that "C:\…" stays a Windows path.
+	const isUrl = /^[a-z][a-z0-9+.-]+:\/\//i.test(location);
+	let text = location;
+	if (isUrl) {
+		try {
+			text = decodeURIComponent(location);
+		} catch {
+			// Not percent-encoded after all: show it as it is.
+		}
+	}
+	return text.split(/[\\/]/).pop() || location;
+}
+
 /** "3 Nov 2026, 19:45", in local time, from an RFC 3339 timestamp. */
 export function formatTimestamp(rfc3339: string, locale: Locale): string {
 	return new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(
