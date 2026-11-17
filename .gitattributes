@@ -1,0 +1,9 @@
+# The same bytes on every system: Windows checkouts keep LF line endings.
+# sqlx checksums each migration file byte for byte, so a CRLF copy of one
+# would make databases created from another checkout refuse to open.
+* text=auto eol=lf
+# Except batch files: cmd.exe misreads labels in LF-only ones (gradlew.bat).
+*.bat text eol=crlf
+*.cmd text eol=crlf
+# Test data stays byte for byte as it was received (the ECB's CSV uses CRLF).
+crates/*/testdata/** -text
