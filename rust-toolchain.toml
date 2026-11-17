@@ -1,0 +1,7 @@
+# Generated from the Nix flake by scripts/toolchain.py: don't edit, run `just toolchain`.
+# rustup reads this outside Nix (Windows, the iOS build); the Nix dev
+# shells have their own Rust, of the same version.
+[toolchain]
+channel = "1.100.0"
+profile = "default"
+components = ["rust-analyzer", "rust-src"]

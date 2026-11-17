@@ -29,12 +29,17 @@
         # rust-docs, rustfmt, and clippy. This profile will be used by rustup by default, and it’s
         # the one recommended for general use."
         # https://rust-lang.github.io/rustup/concepts/profiles.html
+        rustExtensions = [
+          "rust-analyzer"
+          "rust-src"
+        ];
         rustToolchain = pkgs.rust-bin.stable.latest.default.override {
-          extensions = [
-            "rust-analyzer"
-            "rust-src"
-          ];
+          extensions = rustExtensions;
         };
+
+        # Python and the packages the scripts need. websocket-client is for
+        # scripts/android_eval.py.
+        pythonPackages = p: [ p.websocket-client ];
 
         # System libraries Tauri 2 needs on Linux (WebKitGTK webview + GTK).
         # https://v2.tauri.app/start/prerequisites/#linux
@@ -71,8 +76,7 @@
           sqlx-cli
 
           # Scripts and the task runner (see justfile)
-          # websocket-client is for scripts/android_eval.py.
-          (python3.withPackages (p: [ p.websocket-client ]))
+          (python3.withPackages pythonPackages)
           just
 
           # Nix
@@ -99,6 +103,7 @@
         # pieces: the SDK lives in the read-only Nix store.
         androidBuildTools = "37.0.0";
         androidNdk = "29.0.14206865";
+        androidCmdLineTools = "22.0";
         androidenv = pkgs.androidenv.override { licenseAccepted = true; };
         androidComposition = androidenv.composeAndroidPackages {
           platformVersions = [
@@ -111,19 +116,41 @@
           ];
           includeNDK = true;
           ndkVersions = [ androidNdk ];
-          cmdLineToolsVersion = "22.0";
+          cmdLineToolsVersion = androidCmdLineTools;
         };
         androidSdk = androidComposition.androidsdk;
         androidHome = "${androidSdk}/libexec/android-sdk";
 
+        # The emulator's phone image: Android 16 with Google APIs.
+        emulatorImage = {
+          platform = "36";
+          type = "google_apis";
+          abi = "x86_64";
+        };
+        emulatorComposition = androidenv.composeAndroidPackages {
+          cmdLineToolsVersion = androidCmdLineTools;
+          includeEmulator = true;
+          includeSystemImages = true;
+          platformVersions = [ emulatorImage.platform ];
+          systemImageTypes = [ emulatorImage.type ];
+          abiVersions = [ emulatorImage.abi ];
+        };
+        emulatorSdk = emulatorComposition.androidsdk;
+
+        # Adoptium's Temurin build rather than nixpkgs' own OpenJDK: Adoptium
+        # publishes the same release for Windows, so both use one JDK (see
+        # nix/toolchain.nix).
+        jdk = pkgs.temurin-bin-25;
+
         # The desktop toolchain plus Rust's Android targets.
+        androidTargets = [
+          "aarch64-linux-android"
+          "armv7-linux-androideabi"
+          "i686-linux-android"
+          "x86_64-linux-android"
+        ];
         androidRustToolchain = rustToolchain.override {
-          targets = [
-            "aarch64-linux-android"
-            "armv7-linux-androideabi"
-            "i686-linux-android"
-            "x86_64-linux-android"
-          ];
+          targets = androidTargets;
         };
       in
       {
@@ -140,27 +167,48 @@
           # nixpkgs' emulateApp isn't used: it pins command-line tools too old
           # to know recent phones. Needs KVM.
           android-emulator =
-            let
-              sdk =
-                (androidenv.composeAndroidPackages {
-                  cmdLineToolsVersion = "22.0";
-                  includeEmulator = true;
-                  includeSystemImages = true;
-                  platformVersions = [ "36" ];
-                  systemImageTypes = [ "google_apis" ];
-                  abiVersions = [ "x86_64" ];
-                }).androidsdk;
-            in
             pkgs.writers.writePython3Bin "epicycle-android-emulator"
               {
                 # Long command lines read better unwrapped.
                 flakeIgnore = [ "E501" ];
               }
               (
-                builtins.replaceStrings [ "@sdk@" ] [ "${sdk}/libexec/android-sdk" ] (
-                  builtins.readFile ./nix/android_emulator.py
-                )
+                builtins.replaceStrings
+                  [ "@sdk@" "@image@" "@cmdline_tools@" ]
+                  [
+                    "${emulatorSdk}/libexec/android-sdk"
+                    "system-images;android-${emulatorImage.platform};${emulatorImage.type};${emulatorImage.abi}"
+                    androidCmdLineTools
+                  ]
+                  (builtins.readFile ./nix/android_emulator.py)
               );
+        };
+
+        # The dev shells' tool versions, for Windows, where Nix doesn't run:
+        # `nix eval .#toolchain.x86_64-linux`. scripts/toolchain.py turns this
+        # into toolchain.json and rust-toolchain.toml.
+        toolchain = import ./nix/toolchain.nix {
+          inherit (pkgs)
+            lib
+            nodejs
+            pnpm
+            just
+            python3
+            cargo-tauri
+            sqlx-cli
+            ;
+          inherit
+            rustToolchain
+            rustExtensions
+            androidTargets
+            pythonPackages
+            jdk
+            androidComposition
+            emulatorComposition
+            emulatorImage
+            androidCmdLineTools
+            ;
+          androidRepo = pkgs.lib.importJSON "${pkgs.path}/pkgs/development/mobile/androidenv/repo.json";
         };
 
         devShells = {
@@ -176,7 +224,7 @@
             packages = [
               androidRustToolchain
               androidSdk
-              pkgs.jdk25
+              jdk
             ]
             ++ commonPackages;
             buildInputs = tauriLibs;
@@ -184,7 +232,7 @@
             ANDROID_HOME = androidHome;
             ANDROID_SDK_ROOT = androidHome;
             NDK_HOME = "${androidHome}/ndk/${androidNdk}";
-            JAVA_HOME = pkgs.jdk25.home;
+            JAVA_HOME = jdk.home;
             # Gradle downloads its own aapt2, a generic Linux binary that can't
             # run on NixOS; use the SDK's instead.
             GRADLE_OPTS = "-Dorg.gradle.project.android.aapt2FromMavenOverride=${androidHome}/build-tools/${androidBuildTools}/aapt2";
