@@ -54,7 +54,8 @@ warns before running them.
 
 
 All tools come from the Nix flake. With direnv the shell loads automatically;
-otherwise run `nix develop` first.
+otherwise run `nix develop` first. On Windows, see "Developing on Windows"
+below.
 
 ```sh
 just          # build the app (only what changed) and open it
@@ -100,6 +101,37 @@ APKs end up in `crates/app/gen/android/app/build/outputs/apk/`. CI builds a
 signed release APK on every push; download it from the run's artifacts. Android
 Studio isn't needed. The emulator keeps its virtual phone in
 `~/.local/share/epicycle-android-emulator`; delete that folder to start fresh.
+
+## Developing on Windows
+
+Nix doesn't run on Windows, so `scripts/windows_env.py` installs the dev shells'
+tools instead, at the flake's exact versions (written to `toolchain.json`; see
+[DECISIONS.md](docs/DECISIONS.md), "Developing on Windows"). Once, install the
+prerequisites, whose versions don't matter, then clone the repository:
+
+```powershell
+winget install Git.Git Python.Python.3.14 Rustlang.Rustup
+winget install Microsoft.VisualStudio.BuildTools --override "--wait --passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+```
+
+Then, in the repository, and again whenever `toolchain.json` changes:
+
+```powershell
+python scripts\windows_env.py install              # Node, pnpm, just, Python, Rust, Tauri CLI, sqlx-cli
+python scripts\windows_env.py install --android    # also the Android SDK, NDK, JDK and Rust targets
+python scripts\windows_env.py install --emulator   # also the emulator and its phone image
+```
+
+`python scripts\windows_env.py shell` opens a PowerShell with the tools, like
+`nix develop`; the `just` commands above work there, Android included. Start
+VS Code from it (`code .`) so its terminals and rust-analyzer get them too.
+Tools live in `%LOCALAPPDATA%\epicycle-dev`. The emulator needs the Windows
+Hypervisor Platform (as administrator, then restart):
+`Enable-WindowsOptionalFeature -Online -FeatureName HypervisorPlatform`.
+
+After `nix flake update` or changing the tools in `flake.nix`, run
+`just toolchain` on Linux and commit `toolchain.json` and
+`rust-toolchain.toml`; CI fails until they match the flake.
 
 ## Layout
 

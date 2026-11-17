@@ -4,7 +4,8 @@
 Run in the Android dev shell, which `just android-run` enters by itself:
 
 1. Finds a running emulator or connected phone. Without one, starts the
-   emulator (`nix run .#android-emulator`) and leaves it running afterwards.
+   emulator (`nix run .#android-emulator`, or nix/android_emulator.py on
+   Windows) and leaves it running afterwards.
 2. Builds a debug APK for that device's processor.
 3. Installs it over the previous version, keeping the app's data, and opens it.
 
@@ -62,14 +63,21 @@ def start_emulator(args: list[str]) -> subprocess.Popen[bytes]:
     """Starts the emulator in its own session, so it outlives this script."""
     EMULATOR_LOG.parent.mkdir(parents=True, exist_ok=True)
     print(f"Starting the emulator (log: {EMULATOR_LOG})", flush=True)
+    if sys.platform == "win32":
+        # No Nix: the same launcher, with the SDK from scripts/windows_env.py.
+        command = [sys.executable, str(ROOT / "nix" / "android_emulator.py"), *args]
+        detach = {"creationflags": subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS}
+    else:
+        command = ["nix", "run", ".#android-emulator", "--", *args]
+        detach = {"start_new_session": True}
     with EMULATOR_LOG.open("wb") as log:
         return subprocess.Popen(
-            ["nix", "run", ".#android-emulator", "--", *args],
+            command,
             cwd=ROOT,
             stdin=subprocess.DEVNULL,
             stdout=log,
             stderr=subprocess.STDOUT,
-            start_new_session=True,
+            **detach,
         )
 
 
@@ -114,10 +122,11 @@ def install(serial: str) -> None:
     output = result.stdout + result.stderr
     if "INSTALL_FAILED_UPDATE_INCOMPATIBLE" in output:
         # Uninstalling erases the app's data, so that stays the user's call.
+        shell = "" if sys.platform == "win32" else "nix develop .#android --command "
         sys.exit(
             "Epicycle is already installed with a different signing key, probably a "
             "release build.\nUninstalling it erases its data. If that's fine:\n"
-            f"  nix develop .#android --command adb -s {serial} uninstall {PACKAGE}"
+            f"  {shell}adb -s {serial} uninstall {PACKAGE}"
         )
     sys.exit(f"Installing failed:\n{output}")
 

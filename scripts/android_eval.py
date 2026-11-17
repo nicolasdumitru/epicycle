@@ -9,9 +9,14 @@ goes through the same code as the screens:
     just android-eval "window.__TAURI_INTERNALS__.invoke('reminder_settings')"
 
 With several devices connected, choose one by setting ANDROID_SERIAL.
+
+The JavaScript is the argument, or else the EPICYCLE_JS environment variable,
+which is how `just android-eval` passes it: no shell has to quote it, and
+PowerShell's quoting differs from sh's.
 """
 
 import json
+import os
 import subprocess
 import sys
 import urllib.request
@@ -48,10 +53,11 @@ def evaluate(expression: str) -> dict:
 
 
 def main() -> None:
-    if len(sys.argv) != 2:
+    expression = sys.argv[1] if len(sys.argv) == 2 else os.environ.get("EPICYCLE_JS")
+    if len(sys.argv) > 2 or not expression:
         sys.exit(__doc__)
     forward_devtools()
-    result = evaluate(sys.argv[1])
+    result = evaluate(expression)
     if "exceptionDetails" in result:
         sys.exit(json.dumps(result["exceptionDetails"], indent=2))
     print(json.dumps(result["result"].get("value"), indent=2))
