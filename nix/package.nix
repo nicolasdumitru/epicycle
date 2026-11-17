@@ -90,6 +90,14 @@ rustPlatform.buildRustPackage (finalAttrs: {
     webkitgtk_4_1
   ];
 
+  # nixpkgs' Rust builds now link system copies of SQLite and aws-lc
+  # (rustls' cryptography) instead of the ones the crates bundle. Keep the
+  # bundled ones, which the Windows, Android and iOS builds use too, so every
+  # platform runs the same SQLite (sqlx's `sqlite-bundled`).
+  preBuild = ''
+    unset LIBSQLITE3_SYS_USE_PKG_CONFIG AWS_LC_SYS_USE_SYSTEM
+  '';
+
   # CI runs the tests (`just test`); repeating them here only slows installs.
   doCheck = false;
 
