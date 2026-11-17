@@ -184,9 +184,20 @@ the same versions as the flake.
   out by `windows_env.py` (Windows archives), which Google's sdkmanager lists
   correctly and avdmanager makes the virtual Pixel 10 from; the Linux checks,
   tests, emulator package and a debug APK with the Temurin JDK.
-- Not yet run on Windows at all: the Windows workflows need a push, and then
-  the user's PC (prerequisites, `install`, `shell`, `just` commands in
-  PowerShell, the emulator with the Windows Hypervisor Platform).
+- On GitHub's Windows runner (2026-11-17): `install`, then `just check`,
+  `just test` and the installers pass; `install --android` then builds a
+  debug APK. This found a Windows bug, fixed: sqlx-cli read the drive letter
+  in `sqlite://D:/...` as a host name (scripts/sqlx_prepare.py now uses
+  `sqlite:<path>`).
+- The flake update broke the Nix package: nixpkgs now links Rust crates
+  against system SQLite and aws-lc. The package keeps the bundled ones, as on
+  every other platform.
+- Also tested on Linux, on a separate emulator: the changed launcher starts
+  the Pixel 10 (with software rendering, since the test had no GPU access)
+  and the debug APK opens.
+- Not yet tried on the user's PC: the prerequisites, `shell`, the `just`
+  commands interactively in PowerShell, and the emulator with the Windows
+  Hypervisor Platform.
 
 ## Next steps
 
