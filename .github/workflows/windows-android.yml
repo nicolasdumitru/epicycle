@@ -1,0 +1,52 @@
+# Android builds on Windows: that `windows_env.py install --android` gives an
+# SDK, NDK and JDK Gradle and Tauri can build with. The APK isn't kept: the
+# Android workflow builds the one people install.
+#
+# Only when the Windows Android setup could have changed, since it downloads
+# about 1.5 GB (cached afterwards) and takes a while.
+name: Windows Android
+
+on:
+  push:
+    branches: ["**"]
+    paths:
+      - toolchain.json
+      - rust-toolchain.toml
+      - justfile
+      - scripts/windows_env.py
+      - crates/app/gen/android/**
+      - .github/workflows/windows-android.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Tools cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~\AppData\Local\epicycle-dev
+          key: windows-android-tools-${{ hashFiles('toolchain.json') }}
+      - name: Gradle cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~\.gradle\caches
+            ~\.gradle\wrapper
+          key: windows-gradle-${{ hashFiles('crates/app/gen/android/**/*.gradle*', 'crates/app/gen/android/gradle/wrapper/gradle-wrapper.properties') }}
+      - name: Tools
+        run: python scripts/windows_env.py install --android
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+
+      - name: Frontend dependencies
+        run: python scripts/windows_env.py run -- just deps
+      - name: Build a debug APK
+        run: python scripts/windows_env.py run -- just android-debug

@@ -33,6 +33,11 @@ jobs:
       - name: TypeScript bindings are up to date
         run: git diff --exit-code -- ui/src/lib/bindings
 
+      # Windows and the iOS build take their tool versions from these files,
+      # written from the flake, so they must match it.
+      - name: toolchain.json and rust-toolchain.toml are up to date
+        run: nix develop --command python3 scripts/toolchain.py --check
+
   # The Nix package, as installed on NixOS. Also catches a frontend lockfile
   # change without the matching hash in nix/package.nix.
   nix-package:

@@ -19,10 +19,6 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  # The same Tauri CLI version as the Nix dev shell.
-  TAURI_CLI_VERSION: 2.12.2
-
 jobs:
   # The Rust code, including the dialog plugin's Swift code, compiled for
   # iPhones and for the simulator.
@@ -30,10 +26,11 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The flake's Rust version, from rust-toolchain.toml.
       - name: Rust toolchain with the iOS targets
         run: |
-          rustup toolchain install stable --profile minimal --target aarch64-apple-ios,aarch64-apple-ios-sim
-          rustup default stable
+          rustup toolchain install
+          rustup target add aarch64-apple-ios aarch64-apple-ios-sim
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Build for iPhone
         run: cargo build --package epicycle --lib --target aarch64-apple-ios
@@ -47,22 +44,27 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # The flake's versions, from toolchain.json.
+      - name: Versions
+        id: versions
+        run: python3 scripts/toolchain.py versions >> "$GITHUB_OUTPUT"
       - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
         with:
           package_json_file: ui/package.json
-          version: 12.9.0
+          version: ${{ steps.versions.outputs.pnpm }}
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 24
+          node-version: ${{ steps.versions.outputs.node }}
           cache: pnpm
           cache-dependency-path: ui/pnpm-lock.yaml
+      # The flake's Rust version, from rust-toolchain.toml.
       - name: Rust toolchain with the iOS targets
         run: |
-          rustup toolchain install stable --profile minimal --target aarch64-apple-ios,aarch64-apple-ios-sim
-          rustup default stable
+          rustup toolchain install
+          rustup target add aarch64-apple-ios aarch64-apple-ios-sim
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Tauri CLI
-        run: cargo install tauri-cli --version "$TAURI_CLI_VERSION" --locked
+        run: cargo install tauri-cli --version "${{ steps.versions.outputs.tauri-cli }}" --locked
       - name: Frontend dependencies
         run: pnpm --dir ui install --frozen-lockfile
       - name: Generate the Xcode project

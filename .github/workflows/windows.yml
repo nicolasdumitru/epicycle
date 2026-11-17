@@ -1,8 +1,9 @@
-# Windows: the Rust tests, and the installers Tauri makes (NSIS .exe and .msi),
-# built on GitHub's Windows runner. Not signed, so Windows SmartScreen warns
-# before installing. Download them from the run's "Artifacts".
+# Windows: the checks and tests, and the installers Tauri makes (NSIS .exe and
+# .msi), built on GitHub's Windows runner. Not signed, so Windows SmartScreen
+# warns before installing. Download them from the run's "Artifacts".
 #
-# The Nix dev shell isn't used: it's for Linux. Versions match it.
+# The tools come from scripts/windows_env.py, at the flake's versions
+# (toolchain.json), as on a Windows PC: this also tests that setup.
 #
 # release.yml also calls this workflow to build the installers for a release.
 name: Windows
@@ -24,39 +25,36 @@ concurrency:
   group: windows-${{ github.ref }}
   cancel-in-progress: true
 
-env:
-  TAURI_CLI_VERSION: 2.12.2
-
 jobs:
   build:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      # Node, pnpm, just, Python and the Rust tools Cargo builds (tauri-cli,
+      # sqlx-cli), until toolchain.json changes.
+      - name: Tools cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          package_json_file: ui/package.json
-          version: 12.9.0
-      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+          path: ~\AppData\Local\epicycle-dev
+          key: windows-tools-${{ hashFiles('toolchain.json') }}
+      - name: pnpm store cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: ui/pnpm-lock.yaml
-      - name: Rust toolchain
-        run: |
-          rustup toolchain install stable --profile minimal
-          rustup default stable
+          path: ~\AppData\Local\pnpm\store
+          key: windows-pnpm-${{ hashFiles('ui/pnpm-lock.yaml') }}
+      - name: Tools
+        run: python scripts/windows_env.py install
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - name: Tauri CLI
-        run: cargo install tauri-cli --version "$env:TAURI_CLI_VERSION" --locked
-      - name: Frontend dependencies
-        run: pnpm --dir ui install --frozen-lockfile
 
-      # The domain and storage code on Windows: paths, line endings, time zones.
-      - name: Rust tests
-        run: cargo test --workspace
+      # The same commands as on Linux, in the Windows equivalent of the dev
+      # shell: also the domain and storage code on Windows (paths, time zones).
+      - name: Formatting, lints, type checks and sqlx metadata
+        run: python scripts/windows_env.py run -- just check
+      - name: Rust and frontend tests
+        run: python scripts/windows_env.py run -- just test
 
       - name: Build the installers
-        run: cargo tauri build
+        run: python scripts/windows_env.py run -- cargo tauri build
 
       - name: Upload the installers
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
