@@ -30,8 +30,9 @@ def main() -> None:
     for suffix in ("", "-wal", "-shm"):
         Path(f"{DATABASE}{suffix}").unlink(missing_ok=True)
 
-    # Forward slashes, so a Windows path (C:\...) still makes a valid URL.
-    env = {**os.environ, "DATABASE_URL": f"sqlite://{DATABASE.as_posix()}", "SQLX_OFFLINE": "false"}
+    # `sqlite:` and forward slashes, not `sqlite://`: sqlx-cli parses the URL,
+    # and `sqlite://D:/...` would make the Windows drive letter a host name.
+    env = {**os.environ, "DATABASE_URL": f"sqlite:{DATABASE.as_posix()}", "SQLX_OFFLINE": "false"}
     run("sqlx", "database", "create", env=env)
     run("sqlx", "migrate", "run", "--source", str(MIGRATIONS), env=env)
     prepare = ["cargo", "sqlx", "prepare", "--workspace"]
