@@ -57,9 +57,44 @@ Newest decisions are appended at the end of each section.
 - Validation order: **NixOS desktop, then iOS**, then iPadOS, Windows, macOS, Android.
 - iOS builds need macOS with Xcode, which isn't available yet; a remote macOS build
   machine will be used.
+- **Developing on Windows (2026-11-17): the flake's tools, at the flake's
+  versions, without Nix.** Nix doesn't run on Windows, and WSL builds the
+  Linux app rather than the Windows one. The flake stays the only place
+  versions are chosen:
+  - `nix/toolchain.nix` (the flake's `toolchain` output) describes the dev
+    shells' tools as data, from the same packages and settings the shells use.
+    `scripts/toolchain.py` (`just toolchain`) writes it to `toolchain.json`,
+    adding each tool's Windows download and SHA-256, and to
+    `rust-toolchain.toml`. Both are committed; CI fails if they don't match
+    the flake, so run `just toolchain` after `nix flake update`.
+  - `scripts/windows_env.py` installs from `toolchain.json` and plays the part
+    of `nix develop` (`shell`, `run -- …`). Each tool comes from its publisher
+    at the exact version, never "the nearest", from sources that keep every
+    release: nodejs.org, python.org's NuGet package, just's GitHub releases,
+    Adoptium, rustup, crates.io (`cargo install --locked`, with nixpkgs'
+    feature flags) and npm (pnpm). WinGet was considered and kept only for
+    prerequisites whose version doesn't matter (rustup, Visual Studio's C++
+    tools): it lags behind releases and drops old ones, so pinned versions
+    would break after flake updates.
+  - Android packages come from nixpkgs' own copy of Google's repository
+    (`repo.json`), which lists every package's Windows download and checksum:
+    the exact packages and revisions of the flake's compositions, laid out as
+    androidenv does (package.xml, licences, its Google APIs image patch).
+    Tested on Linux with Google's sdkmanager and avdmanager reading such an
+    SDK. sdkmanager isn't used: it always installs the latest emulator, and
+    can't pin it.
+  - **The JDK is Adoptium's Temurin build** (`temurin-bin-25`), on Linux too:
+    nixpkgs' `jdk25` is built from an OpenJDK tag no vendor publishes for
+    Windows, while Temurin publishes every release for both.
+  - Same version, not the same binary: nixpkgs builds Node and Python from
+    source, Windows gets the publishers' builds of that release. Visual
+    Studio's C++ tools and WebView2 have no counterpart in the flake.
+  - `.gitattributes` keeps LF line endings in Windows checkouts, so files are
+    byte for byte the same: sqlx checksums migrations exactly, and a CRLF copy
+    would make databases from another checkout refuse to open.
 - **Android (2026-11-03): a second dev shell, `nix develop .#android`**, with
   everything in the default shell plus the Android SDK, NDK, JDK 25 (the current
-  LTS; the Android Gradle plugin needs 17 or newer) and Rust's
+  LTS, Temurin's build since 2026-11-17; the Android Gradle plugin needs 17 or newer) and Rust's
   Android targets. The default shell stays lean. Both are built from one shared
   package list so they can't drift apart.
   - The SDK is pinned in `flake.nix` and lives in the read-only Nix store, so

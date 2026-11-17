@@ -5,7 +5,7 @@ Where the project stands, what has been decided since the
 end of each piece of work. Design decisions and their reasons are in
 [DECISIONS.md](DECISIONS.md).
 
-Last updated: 2026-11-06.
+Last updated: 2026-11-17.
 
 ## Milestone 1
 
@@ -132,7 +132,8 @@ trying it on real devices.
 |---|---|
 | Nix package | Done: `nix run github:nicolasdumitru/epicycle`, or in the system configuration (see the README). CI builds it. |
 | Android | Builds in CI: a signed release APK on every push and every release. Works in a Pixel 10 emulator, where start-up, exchange rates, safe areas and the keyboard needed fixes. Testers have it; nothing recorded yet from a real phone. |
-| Windows | Builds in CI: tests and installers (unsigned, so SmartScreen warns) on every push and every release. Not yet tried on a Windows PC; the user will. |
+| Windows | Builds in CI: checks, tests and installers (unsigned, so SmartScreen warns) on every push and every release. Not yet tried on a Windows PC; the user will. |
+| Developing on Windows | Built 2026-11-17: `scripts/windows_env.py` installs the flake's tools at its exact versions (`toolchain.json`, written by `just toolchain`); see "Developing on Windows" below. |
 | iOS | Builds for the simulator in CI. Not yet installed on an iPhone: paused until a friend's Mac is available (see "Open questions"). |
 | Releases | Pushing a version tag publishes the Android APK and the Windows installers. v0.1.0; v0.2.0 (2026-11-04: tabs, notes when adding, estimated amounts and ranges, due dates, single-payment changes, what's left to pay); v0.3.0 (2026-11-06: reminders on Android). |
 | Emulator tooling | `just android-run` builds the current code and opens it on the emulator, starting one if needed. Also `just android-install`, `just android-reboot` and `just android-eval`. |
@@ -162,6 +163,31 @@ run as a debug build in the emulator (2026-11-05 and 06):
 - Known limit: reminders cover 60 days ahead and are only renewed while the app
   runs. A background job will fix this (see "Next steps").
 
+## Developing on Windows
+
+Agreed 2026-11-17; see DECISIONS.md, "Developing on Windows". The user wants
+to work on the native app on Windows without setting tools up by hand, with
+the same versions as the flake.
+
+- Built: the flake's `toolchain` output, `just toolchain` (writes
+  `toolchain.json` and `rust-toolchain.toml`, checked in CI),
+  `scripts/windows_env.py` (`install`, `install --android`, `install
+  --emulator`, `shell`, `run`), Windows support in the justfile and the Android
+  scripts, `.gitattributes` for LF line endings. The Windows workflow now uses
+  the same setup and runs `just check` and `just test`; a new Windows Android
+  workflow builds a debug APK with it. The iOS workflow takes Rust, Node,
+  pnpm and the Tauri CLI from the generated files (its Tauri CLI had drifted
+  to an older version than the flake's).
+- The Android shell's JDK is now Temurin's build (`temurin-bin-25`).
+- Tested on Linux only: generating and checking the files; the Windows
+  downloads against their checksums and how they unpack; an Android SDK laid
+  out by `windows_env.py` (Windows archives), which Google's sdkmanager lists
+  correctly and avdmanager makes the virtual Pixel 10 from; the Linux checks,
+  tests, emulator package and a debug APK with the Temurin JDK.
+- Not yet run on Windows at all: the Windows workflows need a push, and then
+  the user's PC (prerequisites, `install`, `shell`, `just` commands in
+  PowerShell, the emulator with the Windows Hypervisor Platform).
+
 ## Next steps
 
 1. **Try v0.3.0 on real Android phones**: reminders, including on other makers'
@@ -170,7 +196,8 @@ run as a debug build in the emulator (2026-11-05 and 06):
 2. **Background job for reminders** (agreed 2026-11-06, after step 1): WorkManager,
    to renew reminders with the app closed. Needs the Rust logic and the database
    to run without the app's window.
-3. **Try the Windows installers** on a PC (the user).
+3. **Try the Windows installers** on a PC (the user), and the Windows
+   development setup: see "Developing on Windows".
 
 Agreed, without a date:
 
