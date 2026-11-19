@@ -205,11 +205,10 @@ the same versions as the flake.
   included, so the helpers behind the public functions show up too; add
   `--open` to open them. `just check` builds them too and fails on any rustdoc
   warning, such as a broken link, so CI does as well.
-- **`crates/core`** documents every public item, and `missing_docs` keeps it
-  that way: `just check` fails on a new item without a doc comment.
-- **`crates/app`**: every module and the crate have a doc comment, but 362
-  public items don't (2026-11-19), mostly the fields and variants of the types
-  the commands return, in `commands.rs` and `history_view.rs`.
+- **Both crates document every public item**, and `missing_docs` keeps it
+  that way: `just check` fails on a new item without a doc comment. The doc
+  comments on the types the commands return also reach the generated
+  TypeScript bindings.
 - **User documentation**: none yet, beyond the labels and hints in the app.
 
 ## Next steps

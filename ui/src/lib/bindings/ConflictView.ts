@@ -4,7 +4,15 @@ import type { KeptSide } from "./KeptSide";
 /**
  * A subscription that both this device and the backup changed separately.
  */
-export type ConflictView = { name: string, kept: KeptSide, 
+export type ConflictView = { 
+/**
+ * The subscription's name, from the kept version if it has one.
+ */
+name: string, 
+/**
+ * Whose version is current afterwards.
+ */
+kept: KeptSide, 
 /**
  * The kept version is a deletion.
  */

@@ -5,8 +5,20 @@ import type { SubscriptionView } from "./SubscriptionView";
 /**
  * Everything the main screen shows.
  */
-export type Overview = { today: string, subscriptions: Array<SubscriptionView>, 
+export type Overview = { 
+/**
+ * Today's date on this device, which the rest is relative to.
+ */
+today: string, 
+/**
+ * Every subscription not deleted.
+ */
+subscriptions: Array<SubscriptionView>, 
 /**
  * Current recurring commitment, one entry per currency.
  */
-monthlyTotal: Array<MoneyView>, annualTotal: Array<MoneyView>, };
+monthlyTotal: Array<MoneyView>, 
+/**
+ * The same, per year.
+ */
+annualTotal: Array<MoneyView>, };

@@ -40,16 +40,22 @@ use uuid::Uuid;
 ///   snapshots read unchanged.
 const SNAPSHOT_VERSION: i64 = 3;
 
+/// Why a database operation failed.
 #[derive(Debug, Error)]
 pub enum DbError {
+    /// SQLite or the connection failed.
     #[error(transparent)]
     Sqlx(#[from] sqlx::Error),
+    /// A migration failed while opening the database.
     #[error(transparent)]
     Migrate(#[from] sqlx::migrate::MigrateError),
+    /// No subscription with this ID, or it was deleted.
     #[error("subscription {0} not found")]
     NotFound(SubscriptionId),
+    /// The stored history, or a backup merged into it, is inconsistent.
     #[error(transparent)]
     History(#[from] HistoryError),
+    /// A stored value doesn't parse, such as a date or a snapshot.
     #[error("stored data is invalid: {0}")]
     Corrupt(String),
 }
@@ -77,6 +83,9 @@ impl DbHandle {
     }
 }
 
+/// The app's SQLite database: the current subscriptions in their own tables,
+/// every version of each in the revision history, the settings and the
+/// exchange rates.
 pub struct Db {
     pool: SqlitePool,
     device_id: Uuid,
@@ -126,6 +135,7 @@ impl Db {
         Ok(Db { pool, device_id })
     }
 
+    /// Closes every connection, waiting for them to finish.
     pub async fn close(self) {
         self.pool.close().await;
     }
@@ -463,6 +473,7 @@ impl Db {
         Ok(settings(&mut conn).await?.favorite_currencies)
     }
 
+    /// Replaces the favourite currencies, keeping the given order.
     pub async fn set_favorites(&self, favorites: &[Currency]) -> Result<(), DbError> {
         let mut tx = self.pool.begin().await?;
         write_favorites(&mut tx, favorites).await?;
@@ -470,6 +481,8 @@ impl Db {
         Ok(())
     }
 
+    /// Deletes the rate the user entered for `currency` on `date`, if any.
+    /// ECB rates are never deleted this way.
     pub async fn delete_manual_rate(&self, currency: Currency, date: Date) -> Result<(), DbError> {
         let (currency, date) = (currency.code(), date.to_string());
         sqlx::query!(
@@ -497,11 +510,13 @@ impl Db {
         }
     }
 
+    /// The currency totals are shown in by default.
     pub async fn reporting_currency(&self) -> Result<Currency, DbError> {
         let mut conn = self.pool.acquire().await?;
         Ok(settings(&mut conn).await?.reporting_currency)
     }
 
+    /// Changes the default currency for totals.
     pub async fn set_reporting_currency(&self, currency: Currency) -> Result<(), DbError> {
         let code = currency.code();
         sqlx::query!(
@@ -513,11 +528,13 @@ impl Db {
         Ok(())
     }
 
+    /// When reminders go out.
     pub async fn reminder_settings(&self) -> Result<ReminderSettings, DbError> {
         let mut conn = self.pool.acquire().await?;
         Ok(settings(&mut conn).await?.reminders)
     }
 
+    /// Stores new reminder settings, with lead times sorted and deduplicated.
     pub async fn set_reminder_settings(&self, reminders: &ReminderSettings) -> Result<(), DbError> {
         let mut tx = self.pool.begin().await?;
         write_reminders(&mut tx, &reminders.clone().normalized()).await?;

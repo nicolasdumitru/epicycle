@@ -6,20 +6,51 @@ import type { MoneyView } from "./MoneyView";
 import type { PlanView } from "./PlanView";
 import type { StatusView } from "./StatusView";
 
-export type SubscriptionView = { id: string, name: string, status: StatusView, 
+/**
+ * A subscription as of today, as the lists and its own screen show it.
+ */
+export type SubscriptionView = { 
+/**
+ * The subscription's ID.
+ */
+id: string, 
+/**
+ * Its name.
+ */
+name: string, 
+/**
+ * Its status today.
+ */
+status: StatusView, 
 /**
  * Price per payment under the current plan (or the first plan, if it hasn't
  * started yet).
  */
-price: MoneyView, billing: Billing, 
+price: MoneyView, 
+/**
+ * How often that plan bills.
+ */
+billing: Billing, 
 /**
  * Monthly and annual equivalents; absent unless active today.
  */
-monthly: MoneyView | null, annual: MoneyView | null, 
+monthly: MoneyView | null, 
+/**
+ * See `monthly`.
+ */
+annual: MoneyView | null, 
 /**
  * ISO date of the next payment, if one is still due.
  */
-nextPayment: string | null, start: string, notes: string, 
+nextPayment: string | null, 
+/**
+ * ISO date of the first plan.
+ */
+start: string, 
+/**
+ * The user's notes, plain text.
+ */
+notes: string, 
 /**
  * The next plan change after today, e.g. the end of a free trial.
  */

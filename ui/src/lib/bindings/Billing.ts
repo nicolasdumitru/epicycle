@@ -3,4 +3,32 @@
 /**
  * How a subscription bills, as shown in the UI.
  */
-export type Billing = { "unit": "days", every: number, } | { "unit": "weeks", every: number, } | { "unit": "months", every: number, day: number, } | { "unit": "years", every: number, month: number, day: number, };
+export type Billing = { "unit": "days", 
+/**
+ * Days between payments.
+ */
+every: number, } | { "unit": "weeks", 
+/**
+ * Weeks between payments.
+ */
+every: number, } | { "unit": "months", 
+/**
+ * Months between payments.
+ */
+every: number, 
+/**
+ * The day of the month, 1–31.
+ */
+day: number, } | { "unit": "years", 
+/**
+ * Years between payments.
+ */
+every: number, 
+/**
+ * The month, 1–12.
+ */
+month: number, 
+/**
+ * The day of the month, 1–31.
+ */
+day: number, };

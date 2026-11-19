@@ -4,4 +4,12 @@
  * An amount rounded to the currency's minor unit, as a decimal string in major
  * units (`"12.99"`), so no precision is lost on the way to the UI.
  */
-export type MoneyView = { amount: string, currency: string, };
+export type MoneyView = { 
+/**
+ * The amount in major units, e.g. `"12.99"`.
+ */
+amount: string, 
+/**
+ * The ISO 4217 code, e.g. `"EUR"`.
+ */
+currency: string, };

@@ -12,7 +12,11 @@ billed: string,
 /**
  * When it's due, or was due when removed.
  */
-date: string, amount: MoneyView, 
+date: string, 
+/**
+ * What is paid; 0 when removed.
+ */
+amount: MoneyView, 
 /**
  * Changed from what the plan says.
  */

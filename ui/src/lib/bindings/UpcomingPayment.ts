@@ -12,7 +12,15 @@ date: string,
 /**
  * When it's billed; the same as `date` unless due later.
  */
-billed: string, subscriptionId: string, name: string, 
+billed: string, 
+/**
+ * The subscription it belongs to.
+ */
+subscriptionId: string, 
+/**
+ * The subscription's name.
+ */
+name: string, 
 /**
  * In the subscription's own currency.
  */

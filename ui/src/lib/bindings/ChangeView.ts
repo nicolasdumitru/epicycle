@@ -9,8 +9,72 @@ import type { StatusChoice } from "./StatusChoice";
 /**
  * One thing a revision changed.
  */
-export type ChangeView = { "kind": "created" } | { "kind": "recreated" } | { "kind": "deleted" } | { "kind": "renamed", from: string, to: string, } | { "kind": "notes", notes: string, } | { "kind": "plan_set", from: string, price: MoneyView, billing: Billing, anchor: string, estimate: EstimateView | null, due: DueChoice, } | { "kind": "plan_removed", from: string, } | { "kind": "status_set", from: string, status: StatusChoice, } | { "kind": "status_removed", from: string, } | { "kind": "payment_changed", billed: string, 
+export type ChangeView = { "kind": "created" } | { "kind": "recreated" } | { "kind": "deleted" } | { "kind": "renamed", 
+/**
+ * The old name.
+ */
+from: string, 
+/**
+ * The new name.
+ */
+to: string, } | { "kind": "notes", 
+/**
+ * The new notes.
+ */
+notes: string, } | { "kind": "plan_set", 
+/**
+ * The day the plan takes effect.
+ */
+from: string, 
+/**
+ * The amount per payment: exact, or the expected one.
+ */
+price: MoneyView, 
+/**
+ * How often it bills.
+ */
+billing: Billing, 
+/**
+ * The billing date the schedule counts from.
+ */
+anchor: string, 
+/**
+ * Set when the amount isn't exact.
+ */
+estimate: EstimateView | null, 
+/**
+ * When each payment is due after its bill.
+ */
+due: DueChoice, } | { "kind": "plan_removed", 
+/**
+ * That date.
+ */
+from: string, } | { "kind": "status_set", 
+/**
+ * The day it takes effect.
+ */
+from: string, 
+/**
+ * The status from then on.
+ */
+status: StatusChoice, } | { "kind": "status_removed", 
+/**
+ * That date.
+ */
+from: string, } | { "kind": "payment_changed", 
+/**
+ * The payment's scheduled billing date.
+ */
+billed: string, 
 /**
  * The amount paid instead; absent when unchanged.
  */
-amount: MoneyView | null, due: AdjustedDueView, } | { "kind": "payment_reset", billed: string, };
+amount: MoneyView | null, 
+/**
+ * When it is due instead.
+ */
+due: AdjustedDueView, } | { "kind": "payment_reset", 
+/**
+ * The payment's scheduled billing date.
+ */
+billed: string, };

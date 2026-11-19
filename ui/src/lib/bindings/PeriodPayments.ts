@@ -5,4 +5,12 @@ import type { MoneyView } from "./MoneyView";
  * Payments due in a calendar period, by due date: all of them, and those
  * from today on (today's included), i.e. what's left to pay.
  */
-export type PeriodPayments = { total: MoneyView, left: MoneyView, };
+export type PeriodPayments = { 
+/**
+ * Every payment due in the period.
+ */
+total: MoneyView, 
+/**
+ * Those due today or later.
+ */
+left: MoneyView, };

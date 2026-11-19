@@ -22,6 +22,7 @@ use crate::db::DbHandle;
 /// How far ahead reminders are scheduled, and at most how many: Android
 /// limits how many alarms an app may set.
 pub const DAYS_AHEAD: i32 = 60;
+/// See [`DAYS_AHEAD`].
 pub const AT_MOST: usize = 60;
 
 /// Even without changes, reschedule this often, so the window moves on.
@@ -33,6 +34,7 @@ const EVERY: Duration = Duration::from_secs(6 * 60 * 60);
 pub struct Rescheduler(Arc<Notify>);
 
 impl Rescheduler {
+    /// Asks for a reschedule; returns at once.
     pub fn request(&self) {
         self.0.notify_one();
     }
@@ -50,6 +52,7 @@ pub fn changed(app: &AppHandle) {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct ReminderSettingsView {
+    /// Whether to remind at all.
     pub enabled: bool,
     /// Days before each event; at most 5, each 0–365.
     pub lead_days: Vec<u16>,
@@ -62,7 +65,9 @@ pub struct ReminderSettingsView {
 #[serde(rename_all = "snake_case")]
 #[ts(export)]
 pub enum NotificationAccess {
+    /// Allowed.
     Granted,
+    /// Refused; only the system settings can change that.
     Denied,
     /// Not asked yet: requesting shows the system's prompt.
     Prompt,
@@ -99,6 +104,7 @@ pub fn settings_of(view: &ReminderSettingsView) -> Result<ReminderSettings, Comm
     Ok(settings)
 }
 
+/// Command: the reminder settings.
 #[tauri::command]
 pub async fn reminder_settings(
     db: State<'_, DbHandle>,
@@ -106,6 +112,8 @@ pub async fn reminder_settings(
     Ok(view(&db.ready().await.reminder_settings().await?))
 }
 
+/// Command: checks and stores new reminder settings, reschedules, and returns
+/// them as stored.
 #[tauri::command]
 pub async fn set_reminder_settings(
     app: AppHandle,
@@ -129,6 +137,7 @@ fn access(state: tauri_plugin_notification::PermissionState) -> NotificationAcce
     }
 }
 
+/// Command: whether the app may show notifications.
 #[tauri::command]
 pub fn notification_access(app: AppHandle) -> Result<NotificationAccess, CommandError> {
     #[cfg(mobile)]

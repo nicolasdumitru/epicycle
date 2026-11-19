@@ -2,4 +2,15 @@
 import type { ImportSummary } from "./ImportSummary";
 import type { Overview } from "./Overview";
 
-export type Imported = { summary: ImportSummary, overview: Overview, };
+/**
+ * The result of an import.
+ */
+export type Imported = { 
+/**
+ * What the import did.
+ */
+summary: ImportSummary, 
+/**
+ * The main screen afterwards.
+ */
+overview: Overview, };

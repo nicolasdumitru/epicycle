@@ -7,7 +7,31 @@ import type { Unit } from "./Unit";
 /**
  * One change to an existing subscription.
  */
-export type Edit = { "kind": "details", name: string, notes: string, } | { "kind": "plan", from: string, amount: string, every: number, unit: Unit, 
+export type Edit = { "kind": "details", 
+/**
+ * The new name.
+ */
+name: string, 
+/**
+ * The new notes; empty removes them.
+ */
+notes: string, } | { "kind": "plan", 
+/**
+ * ISO date the plan takes effect.
+ */
+from: string, 
+/**
+ * Price per payment as typed, in major units.
+ */
+amount: string, 
+/**
+ * How many `unit`s between payments.
+ */
+every: number, 
+/**
+ * The unit of the billing interval.
+ */
+unit: Unit, 
 /**
  * The first payment under the new plan; monthly and yearly billing
  * repeat on its day.
@@ -20,4 +44,32 @@ estimate: EstimateInput | null,
 /**
  * When payments are due; by default when billed.
  */
-due: DueChoice, } | { "kind": "status", from: string, status: StatusChoice, } | { "kind": "payment", billed: string, amount: string, date: string, removed: boolean, } | { "kind": "reset_payment", billed: string, };
+due: DueChoice, } | { "kind": "status", 
+/**
+ * ISO date it takes effect.
+ */
+from: string, 
+/**
+ * The status from then on.
+ */
+status: StatusChoice, } | { "kind": "payment", 
+/**
+ * ISO date of the scheduled bill, which identifies the payment.
+ */
+billed: string, 
+/**
+ * The amount paid, in major units; empty keeps the plan's.
+ */
+amount: string, 
+/**
+ * ISO date it was or will be due; empty keeps the scheduled one.
+ */
+date: string, 
+/**
+ * Skip the payment entirely.
+ */
+removed: boolean, } | { "kind": "reset_payment", 
+/**
+ * ISO date of the scheduled bill.
+ */
+billed: string, };

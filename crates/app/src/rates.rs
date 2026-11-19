@@ -24,12 +24,17 @@ const FIRST_FETCH_DAYS: i64 = 14;
 /// new rates. It publishes once a day, around 16:00 CET.
 const MIN_INTERVAL: SignedDuration = SignedDuration::from_hours(1);
 
+/// Why fetching new exchange rates failed. Cached and manual rates keep
+/// working meanwhile.
 #[derive(Debug, Error)]
 pub enum RefreshError {
+    /// The request failed, usually because the device is offline.
     #[error("couldn't reach the ECB: {0}")]
     Network(#[from] reqwest::Error),
+    /// The response couldn't be read.
     #[error(transparent)]
     Ecb(#[from] ecb::EcbError),
+    /// The rates couldn't be stored.
     #[error(transparent)]
     Db(#[from] DbError),
 }

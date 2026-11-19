@@ -5,7 +5,15 @@ import type { RateView } from "./RateView";
  * Every currency's rate for today (the newest on or before it), and every
  * manual rate.
  */
-export type RatesOverview = { today: string, reportingCurrency: string, 
+export type RatesOverview = { 
+/**
+ * Today's date on this device.
+ */
+today: string, 
+/**
+ * ISO 4217 code of the default currency for totals.
+ */
+reportingCurrency: string, 
 /**
  * One per currency, sorted by code.
  */

@@ -5,8 +5,24 @@ import type { RateSourceView } from "./RateSourceView";
 /**
  * An exchange rate: units of `currency` per 1 EUR on `date`.
  */
-export type RateView = { currency: string, date: string, 
+export type RateView = { 
+/**
+ * ISO 4217 code.
+ */
+currency: string, 
+/**
+ * ISO date the rate applies to.
+ */
+date: string, 
 /**
  * Exact decimal, e.g. `"5.3405"`.
  */
-perEur: string, source: RateSourceView, freshness: FreshnessView, };
+perEur: string, 
+/**
+ * Where it came from.
+ */
+source: RateSourceView, 
+/**
+ * How far to trust it today.
+ */
+freshness: FreshnessView, };

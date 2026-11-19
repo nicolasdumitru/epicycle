@@ -5,7 +5,23 @@ import type { MoneyView } from "./MoneyView";
 /**
  * A deleted subscription that can be restored.
  */
-export type DeletedView = { id: string, name: string, price: MoneyView, billing: Billing, 
+export type DeletedView = { 
+/**
+ * The subscription's ID.
+ */
+id: string, 
+/**
+ * Its name when deleted.
+ */
+name: string, 
+/**
+ * Its amount per payment when deleted.
+ */
+price: MoneyView, 
+/**
+ * How often it billed.
+ */
+billing: Billing, 
 /**
  * RFC 3339 timestamp of the deletion.
  */

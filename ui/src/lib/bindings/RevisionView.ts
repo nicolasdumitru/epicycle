@@ -2,11 +2,22 @@
 import type { CauseView } from "./CauseView";
 import type { ChangeView } from "./ChangeView";
 
-export type RevisionView = { id: string, 
+/**
+ * One revision in a subscription's history screen.
+ */
+export type RevisionView = { 
+/**
+ * The revision's ID, to restore it.
+ */
+id: string, 
 /**
  * RFC 3339 timestamp, from the recording device's clock.
  */
-createdAt: string, cause: CauseView, 
+createdAt: string, 
+/**
+ * Why it was recorded.
+ */
+cause: CauseView, 
 /**
  * Recorded on this device rather than one whose backup was imported.
  */

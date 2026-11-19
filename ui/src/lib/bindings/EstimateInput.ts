@@ -5,4 +5,16 @@ import type { ExpectedChoice } from "./ExpectedChoice";
  * An amount that isn't exact, as typed: bounds in major units, either of
  * which may be empty (not both).
  */
-export type EstimateInput = { low: string, high: string, expected: ExpectedChoice, };
+export type EstimateInput = { 
+/**
+ * The lower bound; empty if unknown.
+ */
+low: string, 
+/**
+ * The upper bound; empty if unknown.
+ */
+high: string, 
+/**
+ * How the expected amount is chosen.
+ */
+expected: ExpectedChoice, };

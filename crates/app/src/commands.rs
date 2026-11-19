@@ -50,7 +50,9 @@ impl Serialize for CommandError {
 /// units (`"12.99"`), so no precision is lost on the way to the UI.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 pub struct MoneyView {
+    /// The amount in major units, e.g. `"12.99"`.
     pub amount: String,
+    /// The ISO 4217 code, e.g. `"EUR"`.
     pub currency: String,
 }
 
@@ -67,12 +69,17 @@ pub(crate) fn rounded(amount: Fractional) -> Result<MoneyView, CommandError> {
     Ok(amount.round()?.into())
 }
 
+/// The unit of a billing interval, as chosen in the subscription form.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum Unit {
+    /// Every so many days.
     Days,
+    /// Every so many weeks, on the first payment's weekday.
     Weeks,
+    /// Every so many months, on a day of the month.
     Months,
+    /// Every so many years, on a date.
     Years,
 }
 
@@ -80,10 +87,32 @@ pub enum Unit {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[serde(tag = "unit", rename_all = "snake_case")]
 pub enum Billing {
-    Days { every: u16 },
-    Weeks { every: u16 },
-    Months { every: u16, day: u8 },
-    Years { every: u16, month: u8, day: u8 },
+    /// Every `every` days.
+    Days {
+        /// Days between payments.
+        every: u16,
+    },
+    /// Every `every` weeks.
+    Weeks {
+        /// Weeks between payments.
+        every: u16,
+    },
+    /// Every `every` months on day `day`; 31 is the month's last day.
+    Months {
+        /// Months between payments.
+        every: u16,
+        /// The day of the month, 1–31.
+        day: u8,
+    },
+    /// Every `every` years on `month`/`day`.
+    Years {
+        /// Years between payments.
+        every: u16,
+        /// The month, 1–12.
+        month: u8,
+        /// The day of the month, 1–31.
+        day: u8,
+    },
 }
 
 impl From<Rule> for Billing {
@@ -104,32 +133,44 @@ impl From<Rule> for Billing {
     }
 }
 
+/// A subscription's status today, as the lists show it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum StatusView {
+    /// Billing.
     Active,
+    /// Stopped for now.
     Paused,
+    /// Ended.
     Cancelled,
     /// Starts after today.
     NotStarted,
 }
 
+/// A subscription as of today, as the lists and its own screen show it.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SubscriptionView {
+    /// The subscription's ID.
     pub id: String,
+    /// Its name.
     pub name: String,
+    /// Its status today.
     pub status: StatusView,
     /// Price per payment under the current plan (or the first plan, if it hasn't
     /// started yet).
     pub price: MoneyView,
+    /// How often that plan bills.
     pub billing: Billing,
     /// Monthly and annual equivalents; absent unless active today.
     pub monthly: Option<MoneyView>,
+    /// See `monthly`.
     pub annual: Option<MoneyView>,
     /// ISO date of the next payment, if one is still due.
     pub next_payment: Option<String>,
+    /// ISO date of the first plan.
     pub start: String,
+    /// The user's notes, plain text.
     pub notes: String,
     /// The next plan change after today, e.g. the end of a free trial.
     pub next_change: Option<PlanView>,
@@ -177,13 +218,17 @@ impl From<Expected> for ExpectedChoice {
 #[serde(tag = "kind", rename_all = "snake_case")]
 #[ts(export)]
 pub enum DueChoice {
+    /// On the day of the bill.
     #[default]
     OnBilling,
+    /// A number of days after the bill.
     DaysAfter {
+        /// How many days.
         days: u16,
     },
     /// The first such day on or after the bill; 31 is the month's last day.
     DayOfMonth {
+        /// The day of the month, 1–31.
         day: u8,
     },
 }
@@ -218,8 +263,11 @@ impl From<Due> for DueChoice {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct EstimateInput {
+    /// The lower bound; empty if unknown.
     pub low: String,
+    /// The upper bound; empty if unknown.
     pub high: String,
+    /// How the expected amount is chosen.
     pub expected: ExpectedChoice,
 }
 
@@ -228,11 +276,15 @@ pub struct EstimateInput {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct EstimateView {
+    /// The lower bound, if known.
     pub low: Option<MoneyView>,
+    /// The upper bound, if known.
     pub high: Option<MoneyView>,
+    /// How the expected amount was chosen.
     pub expected: ExpectedChoice,
 }
 
+/// The plan's estimate, if its amount isn't exact.
 pub fn estimate_view(currency: Currency, plan: &Plan) -> Option<EstimateView> {
     plan.estimate.map(|e| EstimateView {
         low: e.low.map(|m| Money::new(m, currency).into()),
@@ -247,7 +299,9 @@ pub fn estimate_view(currency: Currency, plan: &Plan) -> Option<EstimateView> {
 pub struct PlanView {
     /// ISO date it takes effect.
     pub from: String,
+    /// The amount per payment: exact, or the expected one.
     pub price: MoneyView,
+    /// How often it bills.
     pub billing: Billing,
     /// ISO date of one payment, which fixes the schedule's phase.
     pub anchor: String,
@@ -257,10 +311,13 @@ pub struct PlanView {
     pub due: DueChoice,
 }
 
+/// A status change in a subscription's history.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct StatusChangeView {
+    /// ISO date it takes effect.
     pub from: String,
+    /// The status from then on.
     pub status: StatusChoice,
 }
 
@@ -269,7 +326,9 @@ pub struct StatusChangeView {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct SubscriptionDetail {
+    /// Today's date on this device, which the rest is relative to.
     pub today: String,
+    /// The subscription as of today.
     pub subscription: SubscriptionView,
     /// Oldest first.
     pub plans: Vec<PlanView>,
@@ -289,6 +348,7 @@ pub struct PaymentView {
     pub billed: String,
     /// When it's due, or was due when removed.
     pub date: String,
+    /// What is paid; 0 when removed.
     pub amount: MoneyView,
     /// Changed from what the plan says.
     pub adjusted: bool,
@@ -341,10 +401,13 @@ fn payments_view(s: &Subscription, today: Date) -> Vec<PaymentView> {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct Overview {
+    /// Today's date on this device, which the rest is relative to.
     pub today: String,
+    /// Every subscription not deleted.
     pub subscriptions: Vec<SubscriptionView>,
     /// Current recurring commitment, one entry per currency.
     pub monthly_total: Vec<MoneyView>,
+    /// The same, per year.
     pub annual_total: Vec<MoneyView>,
 }
 
@@ -353,11 +416,15 @@ pub struct Overview {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct NewSubscription {
+    /// The name, as typed.
     pub name: String,
     /// Price per payment as typed, in major units (`"12.99"` or `"12,99"`).
     pub amount: String,
+    /// ISO 4217 code of the currency it bills in.
     pub currency: String,
+    /// How many `unit`s between payments.
     pub every: u16,
+    /// The unit of the billing interval.
     pub unit: Unit,
     /// ISO date of the next (or first) payment. Monthly and yearly billing repeat
     /// on its day of the month.
@@ -402,10 +469,13 @@ pub enum ImportMode {
     ReplaceHistory,
 }
 
+/// Which version an import kept after a conflict.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum KeptSide {
+    /// This device's.
     Device,
+    /// The backup's.
     Backup,
 }
 
@@ -413,7 +483,9 @@ pub enum KeptSide {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ConflictView {
+    /// The subscription's name, from the kept version if it has one.
     pub name: String,
+    /// Whose version is current afterwards.
     pub kept: KeptSide,
     /// The kept version is a deletion.
     pub kept_deleted: bool,
@@ -424,9 +496,13 @@ pub struct ConflictView {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct ImportSummary {
+    /// Subscriptions that appear.
     pub added: u32,
+    /// Subscriptions that stay but change.
     pub updated: u32,
+    /// Subscriptions that disappear.
     pub removed: u32,
+    /// Subscriptions both sides changed, and which version was kept.
     pub conflicts: Vec<ConflictView>,
     /// Changes in this device's history that would be permanently deleted;
     /// only replacing the history deletes any.
@@ -451,6 +527,7 @@ fn count(n: usize) -> u32 {
     u32::try_from(n).unwrap_or(u32::MAX)
 }
 
+/// The summary of replacing the whole history (before rates are added).
 pub fn replacement_summary(plan: &HistoryReplacement) -> ImportSummary {
     ImportSummary {
         added: count(plan.added),
@@ -463,14 +540,18 @@ pub fn replacement_summary(plan: &HistoryReplacement) -> ImportSummary {
     }
 }
 
+/// The result of an import.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct Imported {
+    /// What the import did.
     pub summary: ImportSummary,
+    /// The main screen afterwards.
     pub overview: Overview,
 }
 
+/// The summary of a merging import (before rates are added).
 pub fn import_summary(plan: &ImportPlan) -> ImportSummary {
     ImportSummary {
         lost_revisions: 0,
@@ -599,8 +680,11 @@ fn plan_of(
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum StatusChoice {
+    /// Billing (again).
     Active,
+    /// Stopped for now.
     Paused,
+    /// Ended.
     Cancelled,
 }
 
@@ -634,13 +718,22 @@ impl From<Status> for StatusChoice {
 #[ts(export)]
 pub enum Edit {
     /// Name and notes, which have no effective date.
-    Details { name: String, notes: String },
+    Details {
+        /// The new name.
+        name: String,
+        /// The new notes; empty removes them.
+        notes: String,
+    },
     /// A new price or billing schedule from a date on. A plan on the same date
     /// as an existing one replaces it, which is how mistakes are corrected.
     Plan {
+        /// ISO date the plan takes effect.
         from: String,
+        /// Price per payment as typed, in major units.
         amount: String,
+        /// How many `unit`s between payments.
         every: u16,
+        /// The unit of the billing interval.
         unit: Unit,
         /// The first payment under the new plan; monthly and yearly billing
         /// repeat on its day.
@@ -653,18 +746,30 @@ pub enum Edit {
         due: DueChoice,
     },
     /// Pause, cancel or resume from a date on.
-    Status { from: String, status: StatusChoice },
+    Status {
+        /// ISO date it takes effect.
+        from: String,
+        /// The status from then on.
+        status: StatusChoice,
+    },
     /// Change one payment, identified by its scheduled billing date: what was
     /// actually paid (empty keeps the plan's amount) and when (empty keeps the
     /// due date), or remove it, which only a payment of 0 can be.
     Payment {
+        /// ISO date of the scheduled bill, which identifies the payment.
         billed: String,
+        /// The amount paid, in major units; empty keeps the plan's.
         amount: String,
+        /// ISO date it was or will be due; empty keeps the scheduled one.
         date: String,
+        /// Skip the payment entirely.
         removed: bool,
     },
     /// Undo the change to one payment, so it's paid as scheduled again.
-    ResetPayment { billed: String },
+    ResetPayment {
+        /// ISO date of the scheduled bill.
+        billed: String,
+    },
 }
 
 /// Applies an edit, validating it. The result is a new value; nothing is saved.
@@ -780,6 +885,7 @@ fn plan_view(currency: Currency, p: &epicycle_core::subscription::Dated<Plan>) -
     }
 }
 
+/// Everything the subscription's screen shows, as of `today`.
 pub fn detail_of(s: &Subscription, today: Date) -> Result<SubscriptionDetail, CommandError> {
     Ok(SubscriptionDetail {
         today: today.to_string(),
@@ -801,6 +907,8 @@ pub fn detail_of(s: &Subscription, today: Date) -> Result<SubscriptionDetail, Co
     })
 }
 
+/// Everything the main screen shows, as of `today`. Totals are per currency,
+/// unconverted.
 pub fn overview_of(subscriptions: &[Subscription], today: Date) -> Result<Overview, CommandError> {
     let totals = total_commitment_on(subscriptions, today)?;
     Ok(Overview {
@@ -822,18 +930,25 @@ pub fn overview_of(subscriptions: &[Subscription], today: Date) -> Result<Overvi
     })
 }
 
+/// Where a rate came from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum RateSourceView {
+    /// Downloaded from the European Central Bank.
     Ecb,
+    /// Entered by the user.
     Manual,
 }
 
+/// How far to trust a rate today; see `Freshness` in the core.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum FreshnessView {
+    /// A recent ECB rate.
     Fresh,
+    /// An ECB rate too old to be current.
     Stale,
+    /// Entered by the user.
     Manual,
 }
 
@@ -842,11 +957,15 @@ pub enum FreshnessView {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct RateView {
+    /// ISO 4217 code.
     pub currency: String,
+    /// ISO date the rate applies to.
     pub date: String,
     /// Exact decimal, e.g. `"5.3405"`.
     pub per_eur: String,
+    /// Where it came from.
     pub source: RateSourceView,
+    /// How far to trust it today.
     pub freshness: FreshnessView,
 }
 
@@ -872,11 +991,13 @@ fn rate_view(rate: &Rate, today: Date) -> RateView {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct ConvertedTotal {
+    /// The currency the totals are converted to.
     pub currency: String,
     /// The reporting currency, used unless another is chosen.
     pub default_currency: String,
     /// Absent when a rate is missing.
     pub monthly: Option<MoneyView>,
+    /// See `monthly`.
     pub annual: Option<MoneyView>,
     /// The rates the totals rely on, so their age can be shown.
     pub rates: Vec<RateView>,
@@ -899,7 +1020,9 @@ pub struct ConvertedTotal {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct PeriodPayments {
+    /// Every payment due in the period.
     pub total: MoneyView,
+    /// Those due today or later.
     pub left: MoneyView,
 }
 
@@ -908,9 +1031,13 @@ pub struct PeriodPayments {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct TotalRange {
+    /// The lowest monthly total.
     pub monthly_low: MoneyView,
+    /// The highest monthly total, if every estimate has an upper bound.
     pub monthly_high: Option<MoneyView>,
+    /// The lowest annual total.
     pub annual_low: MoneyView,
+    /// The highest annual total, if every estimate has an upper bound.
     pub annual_high: Option<MoneyView>,
 }
 
@@ -1011,7 +1138,9 @@ pub fn converted_total_of(
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct RatesOverview {
+    /// Today's date on this device.
     pub today: String,
+    /// ISO 4217 code of the default currency for totals.
     pub reporting_currency: String,
     /// One per currency, sorted by code.
     pub current: Vec<RateView>,
@@ -1019,6 +1148,7 @@ pub struct RatesOverview {
     pub manual: Vec<RateView>,
 }
 
+/// The exchange rates screen's data, from the stored rates.
 pub fn rates_overview(rates: &RateTable, reporting: Currency, today: Date) -> RatesOverview {
     let mut currencies: Vec<Currency> = rates.iter().map(Rate::currency).collect();
     currencies.dedup();
@@ -1082,6 +1212,7 @@ pub fn today() -> Date {
     jiff::Zoned::now().date()
 }
 
+/// Command: the main screen.
 #[tauri::command]
 pub async fn overview(db: State<'_, DbHandle>) -> Result<Overview, CommandError> {
     let db = db.ready().await;
@@ -1119,6 +1250,7 @@ pub async fn refresh_rates(db: State<'_, DbHandle>) -> Result<u32, CommandError>
     Ok(u32::try_from(stored).unwrap_or(u32::MAX))
 }
 
+/// Command: the exchange rates screen.
 #[tauri::command]
 pub async fn exchange_rates(db: State<'_, DbHandle>) -> Result<RatesOverview, CommandError> {
     exchange_rates_of(db.ready().await).await
@@ -1132,6 +1264,8 @@ async fn exchange_rates_of(db: &Db) -> Result<RatesOverview, CommandError> {
     ))
 }
 
+/// Command: stores a rate the user entered (units of `currency` per 1 EUR on
+/// `date`), replacing any manual one for that day, and returns the rates screen.
 #[tauri::command]
 pub async fn add_manual_rate(
     db: State<'_, DbHandle>,
@@ -1145,6 +1279,7 @@ pub async fn add_manual_rate(
     exchange_rates_of(db).await
 }
 
+/// Command: deletes a rate the user entered, and returns the rates screen.
 #[tauri::command]
 pub async fn delete_manual_rate(
     db: State<'_, DbHandle>,
@@ -1172,6 +1307,8 @@ async fn favorite_currencies_of(db: &Db) -> Result<Vec<String>, CommandError> {
         .collect())
 }
 
+/// Command: replaces the favourite currencies, in the given order, and
+/// returns them as stored.
 #[tauri::command]
 pub async fn set_favorite_currencies(
     db: State<'_, DbHandle>,
@@ -1186,6 +1323,7 @@ pub async fn set_favorite_currencies(
     favorite_currencies_of(db).await
 }
 
+/// Command: changes the default currency for totals.
 #[tauri::command]
 pub async fn set_reporting_currency(
     db: State<'_, DbHandle>,
@@ -1209,6 +1347,7 @@ pub fn currencies() -> Vec<CurrencyOption> {
         .collect()
 }
 
+/// Command: adds a subscription from the form, and returns the main screen.
 #[tauri::command]
 pub async fn add_subscription(
     app: tauri::AppHandle,
@@ -1231,6 +1370,7 @@ async fn find(db: &Db, id: &str) -> Result<Subscription, CommandError> {
         .ok_or_else(|| CommandError("This subscription no longer exists".into()))
 }
 
+/// Command: one subscription's screen.
 #[tauri::command]
 pub async fn subscription(
     db: State<'_, DbHandle>,
@@ -1240,6 +1380,8 @@ pub async fn subscription(
     detail_of(&find(db, &id).await?, today())
 }
 
+/// Command: applies and saves one edit, recording a revision, and returns
+/// the subscription's screen.
 #[tauri::command]
 pub async fn edit_subscription(
     app: tauri::AppHandle,
@@ -1254,6 +1396,8 @@ pub async fn edit_subscription(
     detail_of(&edited, today())
 }
 
+/// Command: deletes a subscription, recording a revision so it can be
+/// restored, and returns the main screen.
 #[tauri::command]
 pub async fn delete_subscription(
     app: tauri::AppHandle,
@@ -1267,6 +1411,7 @@ pub async fn delete_subscription(
     overview_of(&db.subscriptions().await?, today())
 }
 
+/// Command: writes a backup of everything to `path`.
 #[tauri::command]
 pub async fn export_backup(db: State<'_, DbHandle>, path: String) -> Result<(), CommandError> {
     let db = db.ready().await;
@@ -1319,6 +1464,8 @@ fn history_mode(mode: ImportMode) -> history::ImportMode {
     }
 }
 
+/// Command: imports the backup at `path` as `mode` says, and returns what it
+/// did with the main screen afterwards.
 #[tauri::command]
 pub async fn import_backup(
     app: tauri::AppHandle,

@@ -24,46 +24,68 @@ use crate::commands::{Billing, DueChoice, EstimateView, MoneyView, StatusChoice,
     rename_all_fields = "camelCase"
 )]
 pub enum ChangeView {
+    /// The subscription was added.
     Created,
     /// Created again after being deleted.
     Recreated,
+    /// The subscription was deleted.
     Deleted,
+    /// The name changed.
     Renamed {
+        /// The old name.
         from: String,
+        /// The new name.
         to: String,
     },
     /// The notes after the change; empty if they were removed.
     Notes {
+        /// The new notes.
         notes: String,
     },
     /// A plan added from a date, or the plan from that date changed.
     PlanSet {
+        /// The day the plan takes effect.
         from: String,
+        /// The amount per payment: exact, or the expected one.
         price: MoneyView,
+        /// How often it bills.
         billing: Billing,
+        /// The billing date the schedule counts from.
         anchor: String,
+        /// Set when the amount isn't exact.
         estimate: Option<EstimateView>,
+        /// When each payment is due after its bill.
         due: DueChoice,
     },
+    /// The plan taking effect on a date was removed.
     PlanRemoved {
+        /// That date.
         from: String,
     },
+    /// A status change added from a date, or the one on that date changed.
     StatusSet {
+        /// The day it takes effect.
         from: String,
+        /// The status from then on.
         status: StatusChoice,
     },
+    /// The status change on a date was removed.
     StatusRemoved {
+        /// That date.
         from: String,
     },
     /// One payment changed, identified by its billing date.
     PaymentChanged {
+        /// The payment's scheduled billing date.
         billed: String,
         /// The amount paid instead; absent when unchanged.
         amount: Option<MoneyView>,
+        /// When it is due instead.
         due: AdjustedDueView,
     },
     /// The change to one payment undone.
     PaymentReset {
+        /// The payment's scheduled billing date.
         billed: String,
     },
 }
@@ -72,8 +94,14 @@ pub enum ChangeView {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum AdjustedDueView {
+    /// As scheduled.
     Scheduled,
-    On { date: String },
+    /// On another date.
+    On {
+        /// That date.
+        date: String,
+    },
+    /// Skipped: not paid at all.
     Removed,
 }
 
@@ -89,12 +117,17 @@ impl From<AdjustedDue> for AdjustedDueView {
     }
 }
 
+/// Why a revision was recorded; see [`Cause`].
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum CauseView {
+    /// The user added the subscription.
     Created,
+    /// The user changed it.
     Edited,
+    /// The user deleted it.
     Deleted,
+    /// An import settled what it is.
     Imported,
 }
 
@@ -109,13 +142,16 @@ impl From<Cause> for CauseView {
     }
 }
 
+/// One revision in a subscription's history screen.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct RevisionView {
+    /// The revision's ID, to restore it.
     pub id: String,
     /// RFC 3339 timestamp, from the recording device's clock.
     pub created_at: String,
+    /// Why it was recorded.
     pub cause: CauseView,
     /// Recorded on this device rather than one whose backup was imported.
     pub this_device: bool,
@@ -135,9 +171,13 @@ pub struct RevisionView {
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct DeletedView {
+    /// The subscription's ID.
     pub id: String,
+    /// Its name when deleted.
     pub name: String,
+    /// Its amount per payment when deleted.
     pub price: MoneyView,
+    /// How often it billed.
     pub billing: Billing,
     /// RFC 3339 timestamp of the deletion.
     pub deleted_at: String,

@@ -11,7 +11,15 @@ export type PlanView = {
 /**
  * ISO date it takes effect.
  */
-from: string, price: MoneyView, billing: Billing, 
+from: string, 
+/**
+ * The amount per payment: exact, or the expected one.
+ */
+price: MoneyView, 
+/**
+ * How often it bills.
+ */
+billing: Billing, 
 /**
  * ISO date of one payment, which fixes the schedule's phase.
  */

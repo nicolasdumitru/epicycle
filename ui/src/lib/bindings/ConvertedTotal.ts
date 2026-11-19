@@ -7,7 +7,11 @@ import type { TotalRange } from "./TotalRange";
 /**
  * The current recurring commitment in one currency.
  */
-export type ConvertedTotal = { currency: string, 
+export type ConvertedTotal = { 
+/**
+ * The currency the totals are converted to.
+ */
+currency: string, 
 /**
  * The reporting currency, used unless another is chosen.
  */
@@ -15,7 +19,11 @@ defaultCurrency: string,
 /**
  * Absent when a rate is missing.
  */
-monthly: MoneyView | null, annual: MoneyView | null, 
+monthly: MoneyView | null, 
+/**
+ * See `monthly`.
+ */
+annual: MoneyView | null, 
 /**
  * The rates the totals rely on, so their age can be shown.
  */

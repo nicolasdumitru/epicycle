@@ -11,6 +11,8 @@
 // items (`just docs`), so a public item may point at the private one that
 // explains it.
 #![allow(rustdoc::private_intra_doc_links)]
+// Every public item is documented, as in `epicycle_core`.
+#![warn(missing_docs)]
 
 pub mod commands;
 pub mod dashboard;
@@ -23,6 +25,8 @@ use tauri::Manager;
 
 use crate::db::{Db, DbHandle};
 
+/// Starts the app: registers the plugins, commands and state, opens the
+/// database and starts the background tasks for rates and reminders.
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()

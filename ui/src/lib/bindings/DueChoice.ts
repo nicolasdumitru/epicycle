@@ -3,4 +3,12 @@
 /**
  * When payments are due after their bill (see `Due` in the core).
  */
-export type DueChoice = { "kind": "on_billing" } | { "kind": "days_after", days: number, } | { "kind": "day_of_month", day: number, };
+export type DueChoice = { "kind": "on_billing" } | { "kind": "days_after", 
+/**
+ * How many days.
+ */
+days: number, } | { "kind": "day_of_month", 
+/**
+ * The day of the month, 1–31.
+ */
+day: number, };

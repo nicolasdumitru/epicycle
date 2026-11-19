@@ -5,4 +5,20 @@ import type { MoneyView } from "./MoneyView";
  * The lowest and highest the commitment can be. A missing highest total
  * means some estimate has no upper bound ("or more").
  */
-export type TotalRange = { monthlyLow: MoneyView, monthlyHigh: MoneyView | null, annualLow: MoneyView, annualHigh: MoneyView | null, };
+export type TotalRange = { 
+/**
+ * The lowest monthly total.
+ */
+monthlyLow: MoneyView, 
+/**
+ * The highest monthly total, if every estimate has an upper bound.
+ */
+monthlyHigh: MoneyView | null, 
+/**
+ * The lowest annual total.
+ */
+annualLow: MoneyView, 
+/**
+ * The highest annual total, if every estimate has an upper bound.
+ */
+annualHigh: MoneyView | null, };

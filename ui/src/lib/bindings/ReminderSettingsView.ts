@@ -3,7 +3,11 @@
 /**
  * The reminder settings, as the settings screen shows and edits them.
  */
-export type ReminderSettingsView = { enabled: boolean, 
+export type ReminderSettingsView = { 
+/**
+ * Whether to remind at all.
+ */
+enabled: boolean, 
 /**
  * Days before each event; at most 5, each 0–365.
  */

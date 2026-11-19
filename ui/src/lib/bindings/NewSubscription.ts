@@ -6,11 +6,27 @@ import type { Unit } from "./Unit";
 /**
  * The "add subscription" form.
  */
-export type NewSubscription = { name: string, 
+export type NewSubscription = { 
+/**
+ * The name, as typed.
+ */
+name: string, 
 /**
  * Price per payment as typed, in major units (`"12.99"` or `"12,99"`).
  */
-amount: string, currency: string, every: number, unit: Unit, 
+amount: string, 
+/**
+ * ISO 4217 code of the currency it bills in.
+ */
+currency: string, 
+/**
+ * How many `unit`s between payments.
+ */
+every: number, 
+/**
+ * The unit of the billing interval.
+ */
+unit: Unit, 
 /**
  * ISO date of the next (or first) payment. Monthly and yearly billing repeat
  * on its day of the month.

@@ -7,7 +7,15 @@ import type { SubscriptionView } from "./SubscriptionView";
 /**
  * Everything the subscription screen shows.
  */
-export type SubscriptionDetail = { today: string, subscription: SubscriptionView, 
+export type SubscriptionDetail = { 
+/**
+ * Today's date on this device, which the rest is relative to.
+ */
+today: string, 
+/**
+ * The subscription as of today.
+ */
+subscription: SubscriptionView, 
 /**
  * Oldest first.
  */

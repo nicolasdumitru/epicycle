@@ -5,4 +5,16 @@ import type { MoneyView } from "./MoneyView";
 /**
  * An estimate's bounds and how its expected amount (the price) was chosen.
  */
-export type EstimateView = { low: MoneyView | null, high: MoneyView | null, expected: ExpectedChoice, };
+export type EstimateView = { 
+/**
+ * The lower bound, if known.
+ */
+low: MoneyView | null, 
+/**
+ * The upper bound, if known.
+ */
+high: MoneyView | null, 
+/**
+ * How the expected amount was chosen.
+ */
+expected: ExpectedChoice, };

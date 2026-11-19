@@ -3,4 +3,8 @@
 /**
  * When a changed payment is due.
  */
-export type AdjustedDueView = { "kind": "scheduled" } | { "kind": "on", date: string, } | { "kind": "removed" };
+export type AdjustedDueView = { "kind": "scheduled" } | { "kind": "on", 
+/**
+ * That date.
+ */
+date: string, } | { "kind": "removed" };

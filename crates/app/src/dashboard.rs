@@ -29,7 +29,9 @@ pub struct UpcomingPayment {
     pub date: String,
     /// When it's billed; the same as `date` unless due later.
     pub billed: String,
+    /// The subscription it belongs to.
     pub subscription_id: String,
+    /// The subscription's name.
     pub name: String,
     /// In the subscription's own currency.
     pub amount: MoneyView,
@@ -69,10 +71,13 @@ pub struct MonthView {
     pub estimated: bool,
 }
 
+/// The dashboard's chart: what each month around the current one costs, in
+/// one currency.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct MonthlyChart {
+    /// The currency every amount is converted to.
     pub currency: String,
     /// Oldest first; empty when a rate is missing.
     pub months: Vec<MonthView>,
