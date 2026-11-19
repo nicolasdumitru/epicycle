@@ -1,3 +1,17 @@
+//! The Epicycle app: the Tauri shell around [`epicycle_core`].
+//!
+//! This crate holds everything that touches the outside world: SQLite storage
+//! ([`db`]), the commands the UI calls ([`commands`]), the views they return
+//! ([`dashboard`], [`history_view`]), fetching exchange rates ([`rates`]) and
+//! scheduling reminders ([`notifications`]). The calculations themselves live
+//! in `epicycle_core`; this crate loads data, passes it there with today's
+//! date, and turns the results into what the UI shows.
+
+// Nothing outside the app uses this crate, and its docs are built with private
+// items (`just docs`), so a public item may point at the private one that
+// explains it.
+#![allow(rustdoc::private_intra_doc_links)]
+
 pub mod commands;
 pub mod dashboard;
 pub mod db;

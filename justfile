@@ -27,6 +27,12 @@ check: deps
     cargo clippy --workspace --all-targets -- -D warnings
     {{python}} scripts/sqlx_prepare.py --check
     pnpm --dir ui check
+    cargo doc --workspace --no-deps --document-private-items --config "build.rustdocflags=['-D','warnings']"
+
+# Build the Rust API docs, private items included, into target/doc. Add
+# `--open` to open them in a browser.
+docs *args:
+    cargo doc --workspace --no-deps --document-private-items {{args}}
 
 # Regenerate the sqlx query metadata after changing a query or migration.
 sqlx-prepare:

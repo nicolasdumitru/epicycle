@@ -61,7 +61,8 @@ below.
 just          # build the app (only what changed) and open it
 just dev      # development mode, reloading on UI changes
 just test     # Rust and frontend tests
-just check    # formatting, lints, type checks and sqlx metadata
+just check    # formatting, lints, type checks, sqlx metadata and rustdoc
+just docs     # Rust API docs, private items included (add --open)
 just --list   # everything else
 ```
 

@@ -5,7 +5,7 @@ Where the project stands, what has been decided since the
 end of each piece of work. Design decisions and their reasons are in
 [DECISIONS.md](DECISIONS.md).
 
-Last updated: 2026-11-17.
+Last updated: 2026-11-19.
 
 ## Milestone 1
 
@@ -198,6 +198,18 @@ the same versions as the flake.
 - Not yet tried on the user's PC: the prerequisites, `shell`, the `just`
   commands interactively in PowerShell, and the emulator with the Windows
   Hypervisor Platform.
+
+## Documentation
+
+- **Rust API docs**: `just docs` builds them into `target/doc`, private items
+  included, so the helpers behind the public functions show up too; add
+  `--open` to open them. `just check` builds them too and fails on any rustdoc warning,
+  such as a broken link, so CI does as well.
+- Every module has a doc comment saying what it is for. The 2026-11-19 survey
+  found 169 public items in `crates/core` and 362 in `crates/app` without one:
+  mostly struct fields, enum variants and simple getters, but also some domain
+  types and the backup merge functions.
+- **User documentation**: none yet, beyond the labels and hints in the app.
 
 ## Next steps
 
