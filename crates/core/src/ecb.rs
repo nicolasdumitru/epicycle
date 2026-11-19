@@ -27,10 +27,15 @@ pub fn rates_url(since: Date) -> String {
     )
 }
 
+/// Why an ECB response couldn't be read: the API changed or the response is
+/// broken. Not being online is the app's concern, not this.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum EcbError {
+    /// The header lacks a column the parser needs, named here.
     #[error("the ECB's response has no {0} column")]
     MissingColumn(&'static str),
+    /// A line, numbered from 1 including the header, has a different number
+    /// of columns from the header or a date that can't be read.
     #[error("the ECB's response has a malformed line {0}")]
     Malformed(usize),
 }

@@ -45,6 +45,7 @@ pub fn total_between<'a>(
 pub struct MonthTotal {
     /// First day of the month.
     pub month: Date,
+    /// What was paid that month, per currency.
     pub total: MultiCurrency,
 }
 

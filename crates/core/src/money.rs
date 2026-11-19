@@ -22,15 +22,19 @@ use thiserror::Error;
 #[serde(try_from = "String", into = "String")]
 pub struct Currency(iso_currency::Currency);
 
+/// Why a code isn't a [`Currency`].
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum CurrencyError {
+    /// Not an ISO 4217 code.
     #[error("unknown currency code {0:?}")]
     Unknown(String),
+    /// An ISO 4217 code without minor units, such as XAU (gold).
     #[error("currency {0} has no minor unit and can't be used for payments")]
     NoMinorUnit(String),
 }
 
 impl Currency {
+    /// The euro, which exchange rates are quoted against.
     pub const EUR: Currency = Currency(iso_currency::Currency::EUR);
 
     /// The three-letter ISO 4217 code, e.g. `"EUR"`.
@@ -107,20 +111,33 @@ impl fmt::Debug for Currency {
     }
 }
 
+/// Why arithmetic on amounts failed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
 pub enum MoneyError {
+    /// Adding amounts in two different currencies.
     #[error("can't combine {0} and {1} without a conversion")]
     CurrencyMismatch(Currency, Currency),
+    /// The result doesn't fit the number type.
     #[error("amount out of range")]
     Overflow,
 }
 
+/// Why typed text isn't an amount, from [`Money::parse_major`]. The messages
+/// are shown to the user.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum ParseMoneyError {
+    /// Not a decimal number, e.g. empty or containing letters.
     #[error("{0:?} is not an amount")]
     NotANumber(String),
+    /// More decimal places than the currency's minor unit has.
     #[error("{currency} amounts have at most {places} decimal places")]
-    TooManyDecimals { currency: Currency, places: u32 },
+    TooManyDecimals {
+        /// The currency the amount was typed in.
+        currency: Currency,
+        /// How many decimal places it allows.
+        places: u32,
+    },
+    /// Too large to store.
     #[error("amount out of range")]
     Overflow,
 }
@@ -128,19 +145,24 @@ pub enum ParseMoneyError {
 /// An exact amount: an integer number of minor units in a currency.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Money {
+    /// Value in minor units, e.g. 1299 cents for 12.99 EUR.
     pub minor: i64,
+    /// The currency the amount is in.
     pub currency: Currency,
 }
 
 impl Money {
+    /// `minor` units of `currency`.
     pub fn new(minor: i64, currency: Currency) -> Self {
         Money { minor, currency }
     }
 
+    /// Nothing, in `currency`.
     pub fn zero(currency: Currency) -> Self {
         Money::new(0, currency)
     }
 
+    /// The sum, or an error if the currencies differ or it overflows.
     pub fn checked_add(self, other: Money) -> Result<Money, MoneyError> {
         if self.currency != other.currency {
             return Err(MoneyError::CurrencyMismatch(self.currency, other.currency));
@@ -200,18 +222,22 @@ impl From<Money> for Fractional {
 pub struct Fractional {
     /// Value in minor units, e.g. `433.3333…` cents.
     pub minor: Decimal,
+    /// The currency the amount is in.
     pub currency: Currency,
 }
 
 impl Fractional {
+    /// `minor` units of `currency`, fractions allowed.
     pub fn new(minor: Decimal, currency: Currency) -> Self {
         Fractional { minor, currency }
     }
 
+    /// Nothing, in `currency`.
     pub fn zero(currency: Currency) -> Self {
         Fractional::new(Decimal::ZERO, currency)
     }
 
+    /// The sum, or an error if the currencies differ or it overflows.
     pub fn checked_add(self, other: Fractional) -> Result<Fractional, MoneyError> {
         if self.currency != other.currency {
             return Err(MoneyError::CurrencyMismatch(self.currency, other.currency));
@@ -251,10 +277,12 @@ impl Fractional {
 pub struct MultiCurrency(BTreeMap<Currency, Decimal>);
 
 impl MultiCurrency {
+    /// No amounts.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Adds `amount` to the total in its currency. Fails only on overflow.
     pub fn checked_add(mut self, amount: impl Into<Fractional>) -> Result<Self, MoneyError> {
         let amount = amount.into();
         let entry = self.0.entry(amount.currency).or_insert(Decimal::ZERO);
@@ -276,6 +304,7 @@ impl MultiCurrency {
             .map(|(&currency, &minor)| Fractional::new(minor, currency))
     }
 
+    /// True if nothing was added, not even a zero amount.
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }

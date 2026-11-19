@@ -17,6 +17,7 @@ use uuid::Uuid;
 
 use crate::subscription::{Subscription, SubscriptionId};
 
+/// Identifies a revision, the same on every device it is copied to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct RevisionId(pub Uuid);
@@ -31,14 +32,18 @@ impl fmt::Display for RevisionId {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Cause {
+    /// The user added the subscription.
     Created,
+    /// The user changed it.
     Edited,
+    /// The user deleted it.
     Deleted,
     /// Recorded by an import, to settle what the subscription is afterwards.
     Imported,
 }
 
 impl Cause {
+    /// The name stored in the database and in backups, e.g. `"created"`.
     pub fn as_str(self) -> &'static str {
         match self {
             Cause::Created => "created",
@@ -49,6 +54,7 @@ impl Cause {
     }
 }
 
+/// Text that isn't one of the [`Cause`] names.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 #[error("unknown revision cause {0:?}")]
 pub struct ParseCauseError(String);
@@ -71,37 +77,55 @@ impl FromStr for Cause {
 /// once recorded.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Revision {
+    /// This revision's ID.
     pub id: RevisionId,
+    /// The subscription it is a version of.
     pub subscription_id: SubscriptionId,
     /// The revisions this one replaces: none for the first, and two when it
     /// settles a conflict between two histories that diverged.
     pub parents: Vec<RevisionId>,
     /// The device that recorded it.
     pub device_id: Uuid,
+    /// When it was recorded, by that device's clock.
     pub created_at: Timestamp,
+    /// Why it was recorded.
     pub cause: Cause,
     /// The subscription after the change; `None` exactly when it was deleted.
     pub subscription: Option<Subscription>,
 }
 
+/// Why a set of revisions isn't a valid [`History`], or can't be imported into
+/// one.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum HistoryError {
+    /// The same revision ID twice.
     #[error("revision {0} appears more than once")]
     Duplicate(RevisionId),
+    /// More than two parents, or one parent listed twice.
     #[error("revision {0} has more than two parents, or the same parent twice")]
     BadParents(RevisionId),
+    /// A deletion with a subscription, or another cause without one.
     #[error("revision {0} must have no subscription exactly when it is a deletion")]
     DeletionMismatch(RevisionId),
+    /// The revision's subscription has a different ID from the one it is
+    /// filed under.
     #[error("revision {0} belongs to subscription {1} but contains subscription {2}")]
     WrongSubscription(RevisionId, SubscriptionId, SubscriptionId),
+    /// A parent that isn't in the set.
     #[error("revision {0} refers to parent {1}, which is missing")]
     MissingParent(RevisionId, RevisionId),
+    /// A parent that is a version of another subscription.
     #[error("revision {0} and its parent {1} belong to different subscriptions")]
     ParentOfOtherSubscription(RevisionId, RevisionId),
+    /// Following parents leads back to the same revision.
     #[error("revision {0} is its own ancestor")]
     Cycle(RevisionId),
+    /// Two revisions of one subscription that no other replaces, so it is
+    /// unclear which is current.
     #[error("subscription {0} has more than one latest revision")]
     MultipleHeads(SubscriptionId),
+    /// On import: a revision with the same ID on both sides but different
+    /// content. Revisions never change, so one side was altered.
     #[error("revision {0} differs between the backup and this device")]
     Mismatch(RevisionId),
 }
@@ -118,6 +142,7 @@ pub struct History {
 }
 
 impl History {
+    /// Builds a history from revisions in any order, checking every rule above.
     pub fn new(revisions: impl IntoIterator<Item = Revision>) -> Result<History, HistoryError> {
         let mut by_id = BTreeMap::new();
         for revision in revisions {
@@ -200,6 +225,7 @@ impl History {
         &self.revisions
     }
 
+    /// The revision with this ID, if present.
     pub fn get(&self, id: RevisionId) -> Option<&Revision> {
         self.index.get(&id).map(|&i| &self.revisions[i])
     }
@@ -278,6 +304,8 @@ fn check_revision(r: &Revision) -> Result<(), HistoryError> {
     Ok(())
 }
 
+/// How importing a backup treats this device's data. See [`plan_import`] for
+/// what each does per subscription.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ImportMode {
@@ -303,7 +331,11 @@ pub enum NewHead {
     Existing(RevisionId),
     /// A new revision is recorded, replacing `parents`.
     Record {
+        /// The revisions it replaces: this device's head, plus the backup's
+        /// when settling a conflict.
         parents: Vec<RevisionId>,
+        /// Why: [`Cause::Deleted`] when the subscription is deleted afterwards,
+        /// otherwise [`Cause::Imported`].
         cause: Cause,
     },
 }
@@ -312,22 +344,30 @@ pub enum NewHead {
 /// other stays in the history.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Conflict {
+    /// Which side's version is current after the import.
     pub kept: Side,
+    /// This device's version; `None` if deleted.
     pub local: Option<Subscription>,
+    /// When this device's version was recorded.
     pub local_changed_at: Timestamp,
+    /// The backup's version; `None` if deleted.
     pub incoming: Option<Subscription>,
+    /// When the backup's version was recorded.
     pub incoming_changed_at: Timestamp,
 }
 
 /// What an import does to one subscription.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Change {
+    /// The subscription concerned.
     pub subscription_id: SubscriptionId,
     /// The subscription before the import; `None` if absent or deleted.
     pub before: Option<Subscription>,
     /// The subscription after the import; `None` if absent or deleted.
     pub after: Option<Subscription>,
+    /// How its latest revision moves.
     pub head: NewHead,
+    /// Set when both sides had changed it separately.
     pub conflict: Option<Conflict>,
 }
 
@@ -356,6 +396,7 @@ impl ImportPlan {
         self.count(|c| c.before.is_some() && c.after.is_none())
     }
 
+    /// The changes that settled a conflict.
     pub fn conflicts(&self) -> impl Iterator<Item = &Conflict> {
         self.changes.iter().filter_map(|c| c.conflict.as_ref())
     }
@@ -381,6 +422,8 @@ pub struct HistoryReplacement {
     pub lost_revisions: usize,
 }
 
+/// Compares `local` with `incoming` to say what replacing one with the other
+/// would do, for the user to confirm first.
 pub fn plan_history_replacement(local: &History, incoming: &History) -> HistoryReplacement {
     let current = |h: &History| -> BTreeMap<SubscriptionId, Subscription> {
         h.current().map(|s| (s.id(), s.clone())).collect()

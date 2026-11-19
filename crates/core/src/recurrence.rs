@@ -24,8 +24,10 @@ use thiserror::Error;
 pub struct DayOfMonth(u8);
 
 impl DayOfMonth {
+    /// The last day of every month.
     pub const LAST: DayOfMonth = DayOfMonth(31);
 
+    /// The day `day`, which must be 1–31.
     pub fn new(day: u8) -> Result<Self, ScheduleError> {
         match day {
             1..=31 => Ok(DayOfMonth(day)),
@@ -33,6 +35,7 @@ impl DayOfMonth {
         }
     }
 
+    /// The day as a number, 1–31.
     pub fn get(self) -> u8 {
         self.0
     }
@@ -65,6 +68,7 @@ impl From<DayOfMonth> for u8 {
 pub struct Month(u8);
 
 impl Month {
+    /// The month `month`, which must be 1–12.
     pub fn new(month: u8) -> Result<Self, ScheduleError> {
         match month {
             1..=12 => Ok(Month(month)),
@@ -72,6 +76,7 @@ impl Month {
         }
     }
 
+    /// The month as a number, 1 for January.
     pub fn get(self) -> u8 {
         self.0
     }
@@ -109,16 +114,30 @@ impl From<Month> for u8 {
 #[serde(tag = "unit", rename_all = "snake_case")]
 pub enum Rule {
     /// Every `every` days.
-    Days { every: NonZeroU16 },
+    Days {
+        /// Days between payments.
+        every: NonZeroU16,
+    },
     /// Every `every` weeks, on the anchor's weekday.
-    Weeks { every: NonZeroU16 },
+    Weeks {
+        /// Weeks between payments.
+        every: NonZeroU16,
+    },
     /// Every `every` months on a fixed day, clamped to the month's last day.
-    Months { every: NonZeroU16, day: DayOfMonth },
+    Months {
+        /// Months between payments.
+        every: NonZeroU16,
+        /// The day of the month billed on.
+        day: DayOfMonth,
+    },
     /// Every `every` years on a fixed date. February 29 falls on February 28 in
     /// years that aren't leap years.
     Years {
+        /// Years between payments.
         every: NonZeroU16,
+        /// The month billed in.
         month: Month,
+        /// The day of that month billed on.
         day: DayOfMonth,
     },
 }
@@ -144,16 +163,34 @@ impl Rule {
     }
 }
 
+/// Why a rule or schedule is invalid.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum ScheduleError {
+    /// A day of the month outside 1–31.
     #[error("day of month must be between 1 and 31, got {0}")]
     InvalidDay(u8),
+    /// A month outside 1–12.
     #[error("month must be between 1 and 12, got {0}")]
     InvalidMonth(u8),
+    /// A yearly date that never exists, such as April 31. February 29 is
+    /// allowed.
     #[error("month {} never has a day {}", month.get(), day.get())]
-    DayNotInMonth { month: Month, day: DayOfMonth },
+    DayNotInMonth {
+        /// The month.
+        month: Month,
+        /// The day it never has.
+        day: DayOfMonth,
+    },
+    /// The anchor isn't a date the rule produces; see [`Schedule::new`].
     #[error("{anchor} is not a payment date of this rule (expected {expected})")]
-    AnchorNotOnRule { anchor: Date, expected: Date },
+    AnchorNotOnRule {
+        /// The date given as the anchor.
+        anchor: Date,
+        /// The rule's payment date in the anchor's month or year.
+        expected: Date,
+    },
+    /// The payment date would fall past the dates the calendar library supports
+    /// (years -9999 to 9999).
     #[error("no payment date of this rule falls within the supported date range")]
     OutOfRange,
 }
@@ -222,10 +259,12 @@ impl Schedule {
         Schedule::new(rule, anchor)
     }
 
+    /// How often it bills.
     pub fn rule(&self) -> Rule {
         self.rule
     }
 
+    /// The payment date the schedule counts from.
     pub fn anchor(&self) -> Date {
         self.anchor
     }
@@ -334,17 +373,23 @@ fn days_between(a: Date, b: Date) -> i64 {
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Due {
+    /// On the day of the bill.
     #[default]
     OnBilling,
+    /// A fixed number of days after the bill.
     DaysAfter {
+        /// Days after the bill; 0 gives the bill's own day.
         days: u16,
     },
+    /// On the first such day of the month on or after the bill.
     DayOfMonth {
+        /// The day of the month.
         day: DayOfMonth,
     },
 }
 
 impl Due {
+    /// True when payment is due the day the bill is issued.
     pub fn is_on_billing(&self) -> bool {
         *self == Due::OnBilling
     }

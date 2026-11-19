@@ -20,32 +20,49 @@ use crate::money::{Currency, Fractional, MoneyError, MultiCurrency};
 /// following Tuesday afternoon, five days later.
 pub const STALE_AFTER_DAYS: i64 = 5;
 
+/// Where a rate came from, which decides how far it is trusted.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum RateSource {
     /// Downloaded from the European Central Bank.
-    Ecb { fetched_at: Timestamp },
+    Ecb {
+        /// When it was downloaded.
+        fetched_at: Timestamp,
+    },
     /// Entered by the user, e.g. while offline.
-    Manual { entered_at: Timestamp },
+    Manual {
+        /// When the user entered it.
+        entered_at: Timestamp,
+    },
 }
 
 /// How much a rate can be trusted on a given day.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Freshness {
+    /// An ECB rate at most [`STALE_AFTER_DAYS`] days older than the day it is
+    /// used for.
     Fresh,
+    /// An ECB rate older than that: likely not updated for a while.
     Stale,
+    /// Entered by the user. Never called fresh or stale, since nothing says
+    /// how current the user meant it to be.
     Manual,
 }
 
+/// Why a rate couldn't be made or an amount couldn't be converted.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum FxError {
+    /// No rate at all, of any date, for this currency.
     #[error("no exchange rate for {0}")]
     MissingRate(Currency),
+    /// A rate of zero or less.
     #[error("a rate must be positive")]
     NonPositiveRate,
+    /// A rate for EUR, which rates are quoted against.
     #[error("EUR is the base currency and has no rate")]
     BaseCurrency,
+    /// The converted amount overflowed.
     #[error(transparent)]
     Money(#[from] MoneyError),
 }
@@ -77,6 +94,8 @@ impl TryFrom<UncheckedRate> for Rate {
 }
 
 impl Rate {
+    /// A rate of `per_eur` units of `currency` per 1 EUR, applying on `date`.
+    /// Fails for EUR itself and for a rate that isn't positive.
     pub fn new(
         currency: Currency,
         date: Date,
@@ -97,22 +116,28 @@ impl Rate {
         })
     }
 
+    /// The currency the rate is for.
     pub fn currency(&self) -> Currency {
         self.currency
     }
 
+    /// The day the rate applies to, as published, not when it was fetched.
     pub fn date(&self) -> Date {
         self.date
     }
 
+    /// Units of the currency per 1 EUR.
     pub fn per_eur(&self) -> Decimal {
         self.per_eur
     }
 
+    /// Where the rate came from.
     pub fn source(&self) -> RateSource {
         self.source
     }
 
+    /// How far to trust this rate for `today`: manual rates are always
+    /// [`Freshness::Manual`], ECB rates go stale after [`STALE_AFTER_DAYS`].
     pub fn freshness(&self, today: Date) -> Freshness {
         match self.source {
             RateSource::Manual { .. } => Freshness::Manual,
@@ -168,6 +193,7 @@ impl RateTable {
             .map(|(_, rate)| rate)
     }
 
+    /// Every rate, by currency and then date.
     pub fn iter(&self) -> impl Iterator<Item = &Rate> {
         self.0.values()
     }
@@ -176,6 +202,7 @@ impl RateTable {
 /// An amount converted to another currency, with the rates it relied on.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Converted {
+    /// The amount in the target currency, not yet rounded to whole minor units.
     pub amount: Fractional,
     /// The rates used, without duplicates. Empty if no conversion was needed.
     pub rates: Vec<Rate>,

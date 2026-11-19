@@ -15,6 +15,7 @@ use crate::subscription::{Subscription, SubscriptionId};
 /// When to remind: how many days before each event, and at what time of day.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReminderSettings {
+    /// Whether to remind at all. Off, [`reminders`] gives none.
     pub enabled: bool,
     /// Days before the event, each giving one reminder; sorted, no duplicates.
     pub lead_days: Vec<u16>,
@@ -59,8 +60,11 @@ pub enum ReminderKind {
 /// One reminder to show.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Reminder {
+    /// The subscription it is about.
     pub subscription: SubscriptionId,
+    /// The subscription's name, to show.
     pub name: String,
+    /// What happens on [`Reminder::date`].
     pub kind: ReminderKind,
     /// The day of the event.
     pub date: Date,

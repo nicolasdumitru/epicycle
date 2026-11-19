@@ -32,17 +32,24 @@ impl SubscriptionId {
     }
 }
 
+/// Whether a subscription is billing. Only active subscriptions have
+/// payments; paused and cancelled are the same in every calculation and differ
+/// only in what they tell the user.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Status {
+    /// Billing as its plan says.
     Active,
+    /// Stopped for now, expected to resume.
     Paused,
+    /// Ended.
     Cancelled,
 }
 
 /// What is billed and when, for as long as this plan is in effect.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Plan {
+    /// When bills are issued.
     pub schedule: Schedule,
     /// Amount per payment, in minor units of the subscription's currency: the
     /// exact amount, or the expected one when `estimate` is set. Everything
@@ -151,10 +158,14 @@ impl Plan {
 /// plan's `amount`) was chosen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Estimate {
+    /// The least it can be, in minor units; `None` if unknown, which counts
+    /// as 0.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub low: Option<i64>,
+    /// The most it can be, in minor units; `None` if unknown.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub high: Option<i64>,
+    /// How the plan's amount was chosen within the bounds.
     pub expected: Expected,
 }
 
@@ -184,30 +195,45 @@ fn midpoint(low: i64, high: i64) -> i64 {
 /// A value that takes effect on a date and lasts until the next change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Dated<T> {
+    /// The first day it applies.
     pub from: Date,
+    /// What applies from then on.
     pub value: T,
 }
 
+/// Why a subscription or a change to one is invalid. The messages are shown to
+/// the user.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum SubscriptionError {
+    /// A name that is empty or only whitespace.
     #[error("name must not be empty")]
     EmptyName,
+    /// A negative plan or adjustment amount.
     #[error("amount must not be negative")]
     NegativeAmount,
+    /// An estimate with no bounds, a negative bound, the bounds the wrong way
+    /// round, or an expected amount that doesn't follow from its [`Expected`].
     #[error(
         "an estimate needs a lower or upper bound (lower first), and an expected amount within them"
     )]
     InvalidEstimate,
+    /// No plan at all, so no start date or price.
     #[error("a subscription needs at least one plan")]
     NoPlan,
+    /// A status change dated before the first plan.
     #[error("change on {0} is before the subscription started on {1}")]
     BeforeStart(Date, Date),
+    /// Plans or status changes out of date order, or two on one day.
     #[error("changes must be in date order with at most one per day (problem at {0})")]
     Unordered(Date),
+    /// A free period that ends on or before the day it starts.
     #[error("a free period must end after it starts ({0} to {1})")]
     EmptyFreePeriod(Date, Date),
+    /// An adjustment to a bill the schedule doesn't have.
     #[error("no payment is billed on {0}")]
     NoSuchPayment(Date),
+    /// A payment removed while still costing something; see
+    /// [`AdjustedDue::Removed`].
     #[error("only a payment of 0 can be removed (the one billed on {0})")]
     RemovedPaymentNotZero(Date),
 }
@@ -235,12 +261,16 @@ pub enum AdjustedDue {
     #[default]
     Scheduled,
     /// On another date, e.g. paid late.
-    On { date: Date },
+    On {
+        /// The day it is due instead.
+        date: Date,
+    },
     /// Not at all: a skipped payment, which must have amount 0.
     Removed,
 }
 
 impl AdjustedDue {
+    /// True when the due date isn't changed.
     pub fn is_scheduled(&self) -> bool {
         *self == AdjustedDue::Scheduled
     }
@@ -367,30 +397,37 @@ impl Subscription {
         })
     }
 
+    /// The subscription's ID, the same in every revision.
     pub fn id(&self) -> SubscriptionId {
         self.id
     }
 
+    /// Its name, trimmed and never empty.
     pub fn name(&self) -> &str {
         &self.name
     }
 
+    /// The currency it bills in, fixed for its lifetime.
     pub fn currency(&self) -> Currency {
         self.currency
     }
 
+    /// The first day of the first plan.
     pub fn start(&self) -> Date {
         self.plans[0].from
     }
 
+    /// Every plan, oldest first: what was billed and when, over time.
     pub fn plans(&self) -> &[Dated<Plan>] {
         &self.plans
     }
 
+    /// Every status change, oldest first. Before the first, it is active.
     pub fn status_changes(&self) -> &[Dated<Status>] {
         &self.status_changes
     }
 
+    /// The user's notes, plain text; may be empty.
     pub fn notes(&self) -> &str {
         &self.notes
     }
@@ -417,6 +454,7 @@ impl Subscription {
             .with_adjustments(self.adjustments.clone())
     }
 
+    /// The changes to single payments, by billing date.
     pub fn adjustments(&self) -> &[Adjustment] {
         &self.adjustments
     }
@@ -691,11 +729,13 @@ impl Subscription {
 /// One payment of a subscription.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Payment {
+    /// The subscription it belongs to.
     pub subscription: SubscriptionId,
     /// When it's billed.
     pub billed: Date,
     /// When it's due: when the money actually leaves. Cash flow uses this.
     pub date: Date,
+    /// What is paid: the plan's amount, or the adjusted one.
     pub amount: Money,
     /// Changed from what the plan says (see [`Adjustment`]).
     pub adjusted: bool,

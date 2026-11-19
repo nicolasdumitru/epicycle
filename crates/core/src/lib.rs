@@ -5,6 +5,10 @@
 //! storage, no UI and no clock: callers pass "today" explicitly, which keeps every
 //! result reproducible in tests.
 
+// Every public item is documented, so the API docs (`just docs`) can be read
+// on their own when auditing the domain logic.
+#![warn(missing_docs)]
+
 pub mod backup;
 pub mod cashflow;
 pub mod commitment;

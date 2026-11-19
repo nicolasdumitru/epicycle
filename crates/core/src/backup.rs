@@ -36,8 +36,10 @@ pub const FORMAT: &str = "epicycle-backup";
 /// - 5: adds `settings.reminders`. Older files get the default reminders.
 pub const VERSION: u64 = 5;
 
+/// The user's preferences that travel with a backup.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
+    /// The currency totals are converted to unless the user picks another.
     pub reporting_currency: Currency,
     /// Currencies to switch between quickly, in the user's order, without
     /// duplicates.
@@ -63,37 +65,54 @@ impl Settings {
     }
 }
 
+/// Everything a backup file holds, read and validated. Converting it to and
+/// from JSON is [`Backup::to_json`] and [`Backup::from_json`]; applying it to
+/// stored data is up to the caller.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Backup {
+    /// When the backup was made.
     pub exported_at: Timestamp,
     /// The device that made the backup.
     pub device_id: Uuid,
+    /// The settings at the time of the backup.
     pub settings: Settings,
+    /// Every revision of every subscription, deleted ones included.
     pub history: History,
     /// Exchange rates the user entered. ECB rates aren't backed up: they can
     /// be fetched again.
     pub manual_rates: Vec<Rate>,
 }
 
+/// Why a file couldn't be read as a backup. The messages are shown to the user.
 #[derive(Debug, Error)]
 pub enum BackupError {
+    /// The file isn't JSON at all.
     #[error("the file is not valid JSON ({0})")]
     NotJson(serde_json::Error),
+    /// JSON, but without the Epicycle [`FORMAT`] marker.
     #[error("the file is not an Epicycle backup")]
     NotABackup,
+    /// A format version newer than [`VERSION`], which this app can't read.
     #[error(
         "this backup was made by a newer version of Epicycle (format version {0}); \
          update the app to import it"
     )]
     Newer(u64),
+    /// A version that never existed, such as 0.
     #[error("backup format version {0} is not supported")]
     Unsupported(u64),
+    /// A known version, but a field is missing or invalid, such as an unknown
+    /// currency or a subscription that breaks its own rules.
     #[error("the backup is invalid: {0}")]
     Invalid(serde_json::Error),
+    /// The revisions don't form a valid [`History`].
     #[error("the backup's history is inconsistent: {0}")]
     History(#[from] HistoryError),
+    /// A rate in `manual_rates` claims to come from the ECB. Only manual
+    /// rates are backed up.
     #[error("the backup's exchange rate for {0} on {1} is not one entered by hand")]
     NotManualRate(Currency, Date),
+    /// Two manual rates for the same currency and day.
     #[error("the backup has two exchange rates for {0} on {1}")]
     DuplicateRate(Currency, Date),
 }
@@ -203,6 +222,9 @@ pub struct RateChanges {
     pub removed: usize,
 }
 
+/// Combines this device's manual rates (`local`) with a backup's (`incoming`),
+/// keyed by currency and day, as `how` says, and counts what that changes.
+/// Manual rates have no history, so this is all an import does with them.
 pub fn import_manual_rates(local: &[Rate], incoming: &[Rate], how: RateImport) -> RateChanges {
     let key = |r: &Rate| (r.currency(), r.date());
     let mut result: BTreeMap<(Currency, Date), Rate> = match how {

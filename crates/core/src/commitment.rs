@@ -31,7 +31,10 @@ pub fn payments_per_year(rule: Rule) -> (Decimal, Decimal) {
 /// Monthly and annual equivalents of a recurring cost.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Commitment {
+    /// The average cost per month. Fractional, since a yearly price rarely
+    /// divides into whole cents.
     pub monthly: Fractional,
+    /// The average cost per year.
     pub annual: Fractional,
 }
 
@@ -69,7 +72,9 @@ pub fn commitment_on(
 /// The combined commitment of several subscriptions, per currency.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct CommitmentTotals {
+    /// The sum of the monthly equivalents, per currency.
     pub monthly: MultiCurrency,
+    /// The sum of the annual equivalents, per currency.
     pub annual: MultiCurrency,
 }
 

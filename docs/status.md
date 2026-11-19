@@ -203,12 +203,13 @@ the same versions as the flake.
 
 - **Rust API docs**: `just docs` builds them into `target/doc`, private items
   included, so the helpers behind the public functions show up too; add
-  `--open` to open them. `just check` builds them too and fails on any rustdoc warning,
-  such as a broken link, so CI does as well.
-- Every module has a doc comment saying what it is for. The 2026-11-19 survey
-  found 169 public items in `crates/core` and 362 in `crates/app` without one:
-  mostly struct fields, enum variants and simple getters, but also some domain
-  types and the backup merge functions.
+  `--open` to open them. `just check` builds them too and fails on any rustdoc
+  warning, such as a broken link, so CI does as well.
+- **`crates/core`** documents every public item, and `missing_docs` keeps it
+  that way: `just check` fails on a new item without a doc comment.
+- **`crates/app`**: every module and the crate have a doc comment, but 362
+  public items don't (2026-11-19), mostly the fields and variants of the types
+  the commands return, in `commands.rs` and `history_view.rs`.
 - **User documentation**: none yet, beyond the labels and hints in the app.
 
 ## Next steps
